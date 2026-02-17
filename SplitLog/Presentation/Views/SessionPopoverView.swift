@@ -49,13 +49,21 @@ struct SessionPopoverView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     ForEach(stopwatch.laps) { lap in
                                         let color = lapColor(for: lap.index)
-                                        HStack {
-                                            Text("\(lap.label)：")
-                                                .foregroundStyle(color)
-                                                .fontWeight(.medium)
-                                            Spacer()
-                                            Text(formatDuration(stopwatch.elapsedLap(lap)))
-                                                .monospacedDigit()
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            HStack {
+                                                Text("\(lap.label)：")
+                                                    .fontWeight(.medium)
+                                                    .foregroundStyle(Color.black)
+                                                Spacer()
+                                                Text(formatDuration(stopwatch.elapsedLap(lap)))
+                                                    .monospacedDigit()
+                                                    .foregroundStyle(Color.black)
+                                            }
+
+                                            Rectangle()
+                                                .fill(color)
+                                                .frame(height: 2)
+                                                .clipShape(RoundedRectangle(cornerRadius: 1))
                                         }
                                         .id(lap.id)
                                     }
