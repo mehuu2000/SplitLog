@@ -14,7 +14,10 @@ struct SessionPopoverView: View {
     private let ringBlockDuration: TimeInterval = 30
 
     var body: some View {
-        let timeline = timelineSlices(referenceDate: stopwatch.clock)
+        let referenceDate = stopwatch.clock
+        let timeline = timelineSlices(referenceDate: referenceDate)
+        let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
+        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: referenceDate, totalElapsedSeconds: totalElapsedSeconds)
 
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -28,7 +31,7 @@ struct SessionPopoverView: View {
 
             Divider()
 
-            statusRow(title: "全体経過", value: formatDuration(stopwatch.elapsedSession()))
+            statusRow(title: "全体経過", value: formatDuration(seconds: totalElapsedSeconds))
 
             HStack(alignment: .top, spacing: 16) {
                 SessionTimelineRingView(
@@ -55,7 +58,7 @@ struct SessionPopoverView: View {
                                                     .fontWeight(.medium)
                                                     .foregroundStyle(Color.black)
                                                 Spacer()
-                                                Text(formatDuration(stopwatch.elapsedLap(lap)))
+                                                Text(formatDuration(seconds: lapDisplayedSeconds[lap.id] ?? 0))
                                                     .monospacedDigit()
                                                     .foregroundStyle(Color.black)
                                             }
@@ -269,12 +272,34 @@ struct SessionPopoverView: View {
         )
     }
 
-    private func formatDuration(_ duration: TimeInterval) -> String {
-        let totalSeconds = max(0, Int(duration.rounded(.down)))
+    private func displayedLapSeconds(referenceDate: Date, totalElapsedSeconds: Int) -> [UUID: Int] {
+        var secondsByLapID: [UUID: Int] = [:]
+        var completedTotalSeconds = 0
+
+        for lap in stopwatch.laps {
+            if lap.endedAt != nil {
+                let lapSeconds = durationSeconds(stopwatch.elapsedLap(lap, at: referenceDate))
+                secondsByLapID[lap.id] = lapSeconds
+                completedTotalSeconds += lapSeconds
+                continue
+            }
+
+            secondsByLapID[lap.id] = max(0, totalElapsedSeconds - completedTotalSeconds)
+        }
+
+        return secondsByLapID
+    }
+
+    private func formatDuration(seconds totalSeconds: Int) -> String {
+        let totalSeconds = max(0, totalSeconds)
         let hours = totalSeconds / 3_600
         let minutes = (totalSeconds % 3_600) / 60
         let seconds = totalSeconds % 60
         return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private func durationSeconds(_ duration: TimeInterval) -> Int {
+        max(0, Int(duration.rounded(.down)))
     }
 
     @ViewBuilder
