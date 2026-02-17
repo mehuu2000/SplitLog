@@ -20,6 +20,8 @@ final class StopwatchService: ObservableObject {
     private let foregroundClockUpdateInterval: TimeInterval = 1.0 / 60.0
     private let backgroundClockUpdateInterval: TimeInterval = 1.0
     private var isDisplayActive: Bool = false
+    private var pauseStartedAt: Date?
+    private var completedPauseIntervals: [DateInterval] = []
 
     init(autoTick: Bool = true) {
         self.autoTick = autoTick
@@ -34,7 +36,7 @@ final class StopwatchService: ObservableObject {
     }
 
     func startSession(at date: Date = Date()) {
-        guard state != .running else { return }
+        guard state != .running, state != .paused else { return }
 
         let sessionId = UUID()
         session = WorkSession(id: sessionId, startedAt: date, endedAt: nil)
@@ -49,6 +51,8 @@ final class StopwatchService: ObservableObject {
             )
         ]
         state = .running
+        pauseStartedAt = nil
+        completedPauseIntervals = []
         clock = date
 
         if autoTick {
@@ -76,17 +80,47 @@ final class StopwatchService: ObservableObject {
         clock = date
     }
 
-    func finishSession(at date: Date = Date()) {
-        guard state == .running, var activeSession = session else { return }
+    func pauseSession(at date: Date = Date()) {
+        guard state == .running else { return }
+        state = .paused
+        pauseStartedAt = date
+        clock = date
+        stopClock()
+    }
 
-        if let currentIndex = laps.lastIndex(where: { $0.endedAt == nil }) {
-            laps[currentIndex].endedAt = date
+    func resumeSession(at date: Date = Date()) {
+        guard state == .paused, let pausedAt = pauseStartedAt else { return }
+        let resumedAt = max(date, pausedAt)
+        completedPauseIntervals.append(DateInterval(start: pausedAt, end: resumedAt))
+
+        pauseStartedAt = nil
+        state = .running
+        clock = resumedAt
+
+        if autoTick {
+            startClock()
+        }
+    }
+
+    func finishSession(at date: Date = Date()) {
+        guard (state == .running || state == .paused), var activeSession = session else { return }
+
+        let finishedAt: Date
+        if state == .paused, let pausedAt = pauseStartedAt {
+            finishedAt = pausedAt
+        } else {
+            finishedAt = date
         }
 
-        activeSession.endedAt = date
+        if let currentIndex = laps.lastIndex(where: { $0.endedAt == nil }) {
+            laps[currentIndex].endedAt = finishedAt
+        }
+
+        activeSession.endedAt = finishedAt
         session = activeSession
+        pauseStartedAt = nil
         state = .finished
-        clock = date
+        clock = finishedAt
         stopClock()
     }
 
@@ -94,6 +128,8 @@ final class StopwatchService: ObservableObject {
         state = .idle
         session = nil
         laps = []
+        pauseStartedAt = nil
+        completedPauseIntervals = []
         clock = Date()
         stopClock()
     }
@@ -120,19 +156,24 @@ final class StopwatchService: ObservableObject {
 
     func elapsedSession(at referenceDate: Date? = nil) -> TimeInterval {
         guard let session else { return 0 }
-        let endDate = session.endedAt ?? referenceDate ?? clock
-        return max(0, endDate.timeIntervalSince(session.startedAt))
+        let endDate = resolvedEndDate(endedAt: session.endedAt, referenceDate: referenceDate)
+        return activeElapsed(from: session.startedAt, to: endDate)
     }
 
     func elapsedCurrentLap(at referenceDate: Date? = nil) -> TimeInterval {
         guard let currentLap else { return 0 }
-        let endDate = currentLap.endedAt ?? referenceDate ?? clock
-        return max(0, endDate.timeIntervalSince(currentLap.startedAt))
+        return elapsedLap(currentLap, at: referenceDate)
     }
 
     func elapsedLap(_ lap: WorkLap, at referenceDate: Date? = nil) -> TimeInterval {
-        let endDate = lap.endedAt ?? referenceDate ?? clock
-        return max(0, endDate.timeIntervalSince(lap.startedAt))
+        let endDate = resolvedEndDate(endedAt: lap.endedAt, referenceDate: referenceDate)
+        return activeElapsed(from: lap.startedAt, to: endDate)
+    }
+
+    func activeTimelineOffset(at date: Date) -> TimeInterval {
+        guard let session else { return 0 }
+        let clampedDate = pausedClampedReferenceDate(date)
+        return activeElapsed(from: session.startedAt, to: clampedDate)
     }
 
     private func defaultLapLabel(for index: Int) -> String {
@@ -153,5 +194,35 @@ final class StopwatchService: ObservableObject {
     private func stopClock() {
         timerCancellable?.cancel()
         timerCancellable = nil
+    }
+
+    private func resolvedEndDate(endedAt: Date?, referenceDate: Date?) -> Date {
+        if let endedAt {
+            return endedAt
+        }
+
+        return pausedClampedReferenceDate(referenceDate ?? clock)
+    }
+
+    private func pausedClampedReferenceDate(_ date: Date) -> Date {
+        guard state == .paused, let pauseStartedAt else { return date }
+        return min(date, pauseStartedAt)
+    }
+
+    private func activeElapsed(from start: Date, to end: Date) -> TimeInterval {
+        guard end > start else { return 0 }
+
+        let rawDuration = end.timeIntervalSince(start)
+        let pausedDuration = completedPauseIntervals.reduce(0) { partial, interval in
+            partial + overlapDuration(start: start, end: end, interval: interval)
+        }
+
+        return max(0, rawDuration - pausedDuration)
+    }
+
+    private func overlapDuration(start: Date, end: Date, interval: DateInterval) -> TimeInterval {
+        let overlapStart = max(start, interval.start)
+        let overlapEnd = min(end, interval.end)
+        return max(0, overlapEnd.timeIntervalSince(overlapStart))
     }
 }

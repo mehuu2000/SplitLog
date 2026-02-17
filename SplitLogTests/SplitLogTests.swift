@@ -97,4 +97,60 @@ struct SplitLogTests {
         #expect(service.laps[0].label == "作業1")
     }
 
+    @MainActor
+    @Test func pauseAndResume_excludesPausedDurationFromElapsedTime() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_030)
+        let t3 = Date(timeIntervalSince1970: 1_050)
+
+        service.startSession(at: t0)
+        service.pauseSession(at: t1)
+        #expect(service.state == .paused)
+
+        service.resumeSession(at: t2)
+        #expect(service.state == .running)
+
+        #expect(service.elapsedSession(at: t3) == 30)
+        #expect(service.elapsedCurrentLap(at: t3) == 30)
+    }
+
+    @MainActor
+    @Test func finishSession_whilePaused_usesPauseTimeAsSessionEnd() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let pausedAt = Date(timeIntervalSince1970: 1_015)
+        let finishTappedAt = Date(timeIntervalSince1970: 1_060)
+
+        service.startSession(at: t0)
+        service.pauseSession(at: pausedAt)
+        service.finishSession(at: finishTappedAt)
+
+        #expect(service.state == .finished)
+        #expect(service.session?.endedAt == pausedAt)
+        #expect(service.elapsedSession() == 15)
+    }
+
+    @MainActor
+    @Test func pauseAndResume_keepsCompletedLapDurationConsistent() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_015)
+        let t3 = Date(timeIntervalSince1970: 1_025)
+        let t4 = Date(timeIntervalSince1970: 1_040)
+
+        service.startSession(at: t0)
+        service.finishLap(at: t1) // lap1 completed
+        service.pauseSession(at: t2)
+        service.resumeSession(at: t3)
+        service.finishSession(at: t4)
+
+        #expect(service.completedLaps.count == 2)
+        #expect(service.elapsedLap(service.completedLaps[0]) == 10)
+        #expect(service.elapsedLap(service.completedLaps[1]) == 20)
+        #expect(service.elapsedSession() == 30)
+    }
+
 }

@@ -10,6 +10,7 @@ import Foundation
 enum SessionState: String, Codable, Sendable {
     case idle
     case running
+    case paused
     case finished
 }
 

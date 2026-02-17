@@ -93,7 +93,11 @@ struct SessionPopoverView: View {
             HStack(spacing: 10) {
                 Button("作業開始", action: handleStart)
                     .buttonStyle(.borderedProminent)
-                    .disabled(stopwatch.state == .running)
+                    .disabled(stopwatch.state == .running || stopwatch.state == .paused)
+
+                Button(pauseButtonTitle, action: handlePauseResume)
+                    .buttonStyle(.bordered)
+                    .disabled(stopwatch.state != .running && stopwatch.state != .paused)
 
                 Button("ラップ終了", action: handleFinishLap)
                     .buttonStyle(.bordered)
@@ -101,7 +105,7 @@ struct SessionPopoverView: View {
 
                 Button("作業終了", action: handleFinishSession)
                     .buttonStyle(.bordered)
-                    .disabled(stopwatch.state != .running)
+                    .disabled(stopwatch.state == .idle || stopwatch.state == .finished)
             }
         }
         .padding(14)
@@ -121,6 +125,8 @@ struct SessionPopoverView: View {
             "Idle"
         case .running:
             "Running"
+        case .paused:
+            "Paused"
         case .finished:
             "Finished"
         }
@@ -132,9 +138,15 @@ struct SessionPopoverView: View {
             "Idle"
         case .running:
             "Running"
+        case .paused:
+            "Paused"
         case .finished:
             "Finished"
         }
+    }
+
+    private var pauseButtonTitle: String {
+        stopwatch.state == .paused ? "再開" : "一時停止"
     }
 
     private func handleStart() {
@@ -145,12 +157,23 @@ struct SessionPopoverView: View {
         stopwatch.finishLap()
     }
 
+    private func handlePauseResume() {
+        if stopwatch.state == .running {
+            stopwatch.pauseSession()
+            return
+        }
+
+        if stopwatch.state == .paused {
+            stopwatch.resumeSession()
+        }
+    }
+
     private func handleFinishSession() {
         stopwatch.finishSession()
     }
 
     private func timelineSlices(referenceDate: Date) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {
-        guard let session = stopwatch.session else {
+        guard stopwatch.session != nil else {
             return ([], [], false)
         }
 
@@ -162,7 +185,7 @@ struct SessionPopoverView: View {
         if elapsed < ringBlockDuration {
             let innerWindow = 0..<ringBlockDuration
             return (
-                buildSlices(in: innerWindow, sessionStart: session.startedAt, referenceDate: referenceDate, windowID: "inner"),
+                buildSlices(in: innerWindow, referenceDate: referenceDate, windowID: "inner"),
                 [],
                 false
             )
@@ -173,21 +196,20 @@ struct SessionPopoverView: View {
         let outerWindow = currentBlockStart..<(currentBlockStart + ringBlockDuration)
 
         return (
-            buildSlices(in: innerWindow, sessionStart: session.startedAt, referenceDate: referenceDate, windowID: "inner"),
-            buildSlices(in: outerWindow, sessionStart: session.startedAt, referenceDate: referenceDate, windowID: "outer"),
+            buildSlices(in: innerWindow, referenceDate: referenceDate, windowID: "inner"),
+            buildSlices(in: outerWindow, referenceDate: referenceDate, windowID: "outer"),
             true
         )
     }
 
     private func buildSlices(
         in window: Range<TimeInterval>,
-        sessionStart: Date,
         referenceDate: Date,
         windowID: String
     ) -> [TimelineRingSlice] {
         stopwatch.laps.compactMap { lap in
-            let lapStart = max(0, lap.startedAt.timeIntervalSince(sessionStart))
-            let rawLapEnd = (lap.endedAt ?? referenceDate).timeIntervalSince(sessionStart)
+            let lapStart = max(0, stopwatch.activeTimelineOffset(at: lap.startedAt))
+            let rawLapEnd = stopwatch.activeTimelineOffset(at: lap.endedAt ?? referenceDate)
             let lapEnd = max(lapStart, rawLapEnd)
 
             let start = max(lapStart, window.lowerBound)
