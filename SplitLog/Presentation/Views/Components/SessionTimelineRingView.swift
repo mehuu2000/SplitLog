@@ -35,8 +35,10 @@ struct SessionTimelineRingView: View {
                         .frame(width: side, height: side)
 
                     ForEach(outerSlices) { slice in
-                        RingArcShape(startRatio: slice.startRatio, endRatio: slice.endRatio)
+                        Circle()
+                            .trim(from: clampedRatio(slice.startRatio), to: clampedRatio(slice.endRatio))
                             .stroke(slice.color, style: StrokeStyle(lineWidth: outerLineWidth, lineCap: .butt))
+                            .rotationEffect(.degrees(-90))
                             .frame(width: side, height: side)
                     }
                 }
@@ -46,31 +48,19 @@ struct SessionTimelineRingView: View {
                     .frame(width: innerSide, height: innerSide)
 
                 ForEach(innerSlices) { slice in
-                    RingArcShape(startRatio: slice.startRatio, endRatio: slice.endRatio)
+                    Circle()
+                        .trim(from: clampedRatio(slice.startRatio), to: clampedRatio(slice.endRatio))
                         .stroke(slice.color, style: StrokeStyle(lineWidth: innerLineWidth, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
                         .frame(width: innerSide, height: innerSide)
                 }
             }
             .frame(width: side, height: side)
         }
     }
-}
 
-private struct RingArcShape: Shape {
-    let startRatio: Double
-    let endRatio: Double
-
-    func path(in rect: CGRect) -> Path {
-        guard endRatio > startRatio else { return Path() }
-
-        let radius = min(rect.width, rect.height) / 2
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let startAngle = Angle(degrees: -90 + 360 * startRatio)
-        let endAngle = Angle(degrees: -90 + 360 * endRatio)
-
-        var path = Path()
-        path.addArc(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-        return path
+    private func clampedRatio(_ ratio: Double) -> CGFloat {
+        CGFloat(min(1, max(0, ratio)))
     }
 }
 

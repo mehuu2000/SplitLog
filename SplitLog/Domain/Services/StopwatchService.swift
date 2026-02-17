@@ -17,6 +17,9 @@ final class StopwatchService: ObservableObject {
 
     private var timerCancellable: AnyCancellable?
     private let autoTick: Bool
+    private let foregroundClockUpdateInterval: TimeInterval = 1.0 / 60.0
+    private let backgroundClockUpdateInterval: TimeInterval = 1.0
+    private var isDisplayActive: Bool = false
 
     init(autoTick: Bool = true) {
         self.autoTick = autoTick
@@ -107,6 +110,14 @@ final class StopwatchService: ObservableObject {
         laps[index].label = trimmed
     }
 
+    func setDisplayActive(_ isActive: Bool) {
+        guard isDisplayActive != isActive else { return }
+        isDisplayActive = isActive
+
+        guard autoTick, state == .running else { return }
+        startClock()
+    }
+
     func elapsedSession(at referenceDate: Date? = nil) -> TimeInterval {
         guard let session else { return 0 }
         let endDate = session.endedAt ?? referenceDate ?? clock
@@ -129,9 +140,10 @@ final class StopwatchService: ObservableObject {
     }
 
     private func startClock() {
+        let interval = isDisplayActive ? foregroundClockUpdateInterval : backgroundClockUpdateInterval
         stopClock()
         timerCancellable = Timer
-            .publish(every: 1, on: .main, in: .common)
+            .publish(every: interval, tolerance: interval * 0.25, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] now in
                 self?.clock = now

@@ -10,7 +10,8 @@ import SwiftUI
 @MainActor
 struct SessionPopoverView: View {
     @StateObject private var stopwatch = StopwatchService()
-    private let ringBlockDuration: TimeInterval = 12 * 60 * 60
+    // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
+    private let ringBlockDuration: TimeInterval = 30
 
     var body: some View {
         let timeline = timelineSlices(referenceDate: stopwatch.clock)
@@ -43,17 +44,28 @@ struct SessionPopoverView: View {
                             .foregroundStyle(.secondary)
                             .font(.subheadline)
                     } else {
-                        ScrollView(showsIndicators: false) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ForEach(stopwatch.laps) { lap in
-                                    let color = lapColor(for: lap.index)
-                                    HStack {
-                                        Text("\(lap.label)：")
-                                            .foregroundStyle(color)
-                                            .fontWeight(.medium)
-                                        Spacer()
-                                        Text(formatDuration(stopwatch.elapsedLap(lap)))
-                                            .monospacedDigit()
+                        ScrollViewReader { proxy in
+                            ScrollView(showsIndicators: false) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(stopwatch.laps) { lap in
+                                        let color = lapColor(for: lap.index)
+                                        HStack {
+                                            Text("\(lap.label)：")
+                                                .foregroundStyle(color)
+                                                .fontWeight(.medium)
+                                            Spacer()
+                                            Text(formatDuration(stopwatch.elapsedLap(lap)))
+                                                .monospacedDigit()
+                                        }
+                                        .id(lap.id)
+                                    }
+                                }
+                            }
+                            .onChange(of: stopwatch.laps.count) { _, _ in
+                                guard let lastID = stopwatch.laps.last?.id else { return }
+                                DispatchQueue.main.async {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        proxy.scrollTo(lastID, anchor: .bottom)
                                     }
                                 }
                             }
@@ -87,6 +99,12 @@ struct SessionPopoverView: View {
         .padding(14)
         .frame(width: 540, height: 380)
         .background(.regularMaterial)
+        .onAppear {
+            stopwatch.setDisplayActive(true)
+        }
+        .onDisappear {
+            stopwatch.setDisplayActive(false)
+        }
     }
 
     private var stateText: String {
@@ -182,21 +200,43 @@ struct SessionPopoverView: View {
     }
 
     private func lapColor(for index: Int) -> Color {
-        let palette: [Color] = [
-            .red,
-            .green,
-            .orange,
-            .blue,
-            .purple,
-            .pink,
-            .teal,
-            .indigo,
-            .mint,
-            .brown,
+        let rgbWheel: [(Double, Double, Double)] = [
+            (255, 0, 0),
+            (255, 64, 0),
+            (255, 128, 0),
+            (255, 192, 0),
+            (255, 255, 0),
+            (192, 255, 0),
+            (128, 255, 0),
+            (64, 255, 0),
+            (0, 255, 0),
+            (0, 255, 64),
+            (0, 255, 128),
+            (0, 255, 192),
+            (0, 255, 255),
+            (0, 192, 255),
+            (0, 128, 255),
+            (0, 64, 255),
+            (0, 0, 255),
+            (64, 0, 255),
+            (128, 0, 255),
+            (192, 0, 255),
+            (255, 0, 255),
+            (255, 0, 192),
+            (255, 0, 128),
+            (255, 0, 64),
         ]
 
-        let paletteIndex = max(0, (index - 1) % palette.count)
-        return palette[paletteIndex]
+        let zeroBasedIndex = max(0, index - 1)
+        let cycle = zeroBasedIndex / rgbWheel.count
+        let paletteIndex = (zeroBasedIndex + cycle) % rgbWheel.count
+        let rgb = rgbWheel[paletteIndex]
+
+        return Color(
+            red: rgb.0 / 255.0,
+            green: rgb.1 / 255.0,
+            blue: rgb.2 / 255.0
+        )
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
