@@ -67,7 +67,7 @@ final class StopwatchService: ObservableObject {
 
         let context = makeIdleSessionContext(at: date)
         sessionContexts[context.session.id] = context
-        sessionOrder.append(context.session.id)
+        sessionOrder.insert(context.session.id, at: 0)
         selectedSessionID = context.session.id
         clock = date
 
@@ -96,7 +96,7 @@ final class StopwatchService: ObservableObject {
         guard let selectedSessionID, var context = sessionContexts[selectedSessionID] else {
             let newContext = makeRunningSessionContext(at: date)
             sessionContexts[newContext.session.id] = newContext
-            sessionOrder.append(newContext.session.id)
+            sessionOrder.insert(newContext.session.id, at: 0)
             selectedSessionID = newContext.session.id
             clock = date
             applySelectedContext()
@@ -293,6 +293,7 @@ final class StopwatchService: ObservableObject {
 
     func deleteSelectedSession(at date: Date = Date()) {
         guard let selectedSessionID else { return }
+        guard let removedIndex = sessionOrder.firstIndex(of: selectedSessionID) else { return }
 
         sessionContexts.removeValue(forKey: selectedSessionID)
         sessionOrder.removeAll { $0 == selectedSessionID }
@@ -306,7 +307,8 @@ final class StopwatchService: ObservableObject {
             return
         }
 
-        self.selectedSessionID = sessionOrder[0]
+        let preferredIndex = max(0, removedIndex - 1)
+        self.selectedSessionID = sessionOrder[preferredIndex]
         clock = date
         applySelectedContext()
         persistState()

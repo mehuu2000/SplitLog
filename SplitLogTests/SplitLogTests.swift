@@ -369,6 +369,40 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func deleteSelectedSession_selectsNewerNeighborWhenAvailable() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+
+        service.addSession(at: t0)
+        guard let session1ID = service.session?.id else {
+            Issue.record("session1 should exist")
+            return
+        }
+        service.addSession(at: t1)
+        guard let session2ID = service.session?.id else {
+            Issue.record("session2 should exist")
+            return
+        }
+        service.addSession(at: t2)
+        guard let session3ID = service.session?.id else {
+            Issue.record("session3 should exist")
+            return
+        }
+
+        service.selectSession(sessionID: session2ID, at: t3)
+        service.deleteSelectedSession(at: t3)
+
+        #expect(service.sessions.count == 2)
+        #expect(service.selectedSessionID == session3ID)
+        #expect(service.session?.id == session3ID)
+        #expect(service.sessions.contains(where: { $0.id == session2ID }) == false)
+        #expect(service.sessions.contains(where: { $0.id == session1ID }))
+    }
+
+    @MainActor
     @Test func pauseAndResume_keepsCompletedLapDurationConsistent() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
