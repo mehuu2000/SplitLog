@@ -16,6 +16,7 @@ struct SessionPopoverView: View {
     @State private var editingFocusToken: Int = 0
     @State private var isShowingResetConfirmation = false
     @State private var isShowingDeleteSessionConfirmation = false
+    @State private var isShowingSessionOverflowList = false
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -252,42 +253,74 @@ struct SessionPopoverView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    ForEach(inlineSessions) { listedSession in
+                        let isSelected = stopwatch.selectedSessionID == listedSession.id
+                        Button {
+                            handleSelectSession(sessionID: listedSession.id)
+                        } label: {
+                            Text(listedSession.title)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(width: 64)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .frame(width: 64)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .frame(width: 220)
+            }
+
+            Button {
+                isShowingSessionOverflowList = true
+            } label: {
+                VStack(spacing: 2) {
+                    Circle().frame(width: 3, height: 3)
+                    Circle().frame(width: 3, height: 3)
+                    Circle().frame(width: 3, height: 3)
+                }
+                .foregroundStyle(Color.primary)
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .disabled(stopwatch.sessions.isEmpty)
+            .opacity(stopwatch.sessions.isEmpty ? 0.6 : 1)
+            .help("セッション一覧")
+            .popover(isPresented: $isShowingSessionOverflowList) {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 6) {
                         ForEach(stopwatch.sessions) { listedSession in
                             let isSelected = stopwatch.selectedSessionID == listedSession.id
                             Button {
+                                isShowingSessionOverflowList = false
                                 handleSelectSession(sessionID: listedSession.id)
                             } label: {
                                 Text(listedSession.title)
-                                    .font(.caption)
+                                    .font(.subheadline)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                                    .frame(maxWidth: 100)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
                                     .background(
                                         Capsule()
-                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.primary.opacity(0.07))
                                     )
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 2)
                 }
-                .frame(width: 220)
+                .padding(10)
+                .frame(width: 180, height: 260, alignment: .top)
             }
-
-            Button(action: {}) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .disabled(true)
-            .opacity(0.6)
-            .help("セッション一覧アクション（将来対応）")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
@@ -295,6 +328,15 @@ struct SessionPopoverView: View {
             Capsule()
                 .stroke(Color.primary.opacity(0.28), lineWidth: 1)
         )
+        .onChange(of: stopwatch.sessions.count) { _, count in
+            if count == 0 {
+                isShowingSessionOverflowList = false
+            }
+        }
+    }
+
+    private var inlineSessions: [WorkSession] {
+        Array(stopwatch.sessions.prefix(3))
     }
 
     private var subtitleText: String {
