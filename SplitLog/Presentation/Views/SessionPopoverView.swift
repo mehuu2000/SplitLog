@@ -253,28 +253,30 @@ struct SessionPopoverView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
             } else {
-                HStack(spacing: 4) {
-                    ForEach(inlineSessions) { listedSession in
-                        let isSelected = stopwatch.selectedSessionID == listedSession.id
-                        Button {
-                            handleSelectSession(sessionID: listedSession.id)
-                        } label: {
-                            Text(listedSession.title)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .frame(width: 64)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
-                                )
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(stopwatch.sessions) { listedSession in
+                            let isSelected = stopwatch.selectedSessionID == listedSession.id
+                            Button {
+                                handleSelectSession(sessionID: listedSession.id)
+                            } label: {
+                                Text(listedSession.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .frame(width: 64)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .frame(width: 64)
                         }
-                        .buttonStyle(.plain)
-                        .frame(width: 64)
                     }
+                    .padding(.horizontal, 2)
                 }
-                .padding(.horizontal, 2)
                 .frame(width: 220)
             }
 
@@ -333,10 +335,6 @@ struct SessionPopoverView: View {
                 isShowingSessionOverflowList = false
             }
         }
-    }
-
-    private var inlineSessions: [WorkSession] {
-        Array(stopwatch.sessions.prefix(3))
     }
 
     private var subtitleText: String {
