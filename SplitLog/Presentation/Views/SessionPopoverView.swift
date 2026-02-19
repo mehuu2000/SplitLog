@@ -119,13 +119,28 @@ struct SessionPopoverView: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 10) {
-                Button(primaryActionButtonTitle, action: handlePrimaryAction)
-                    .buttonStyle(.borderedProminent)
+            HStack {
+                HStack(spacing: 10) {
+                    Button(primaryActionButtonTitle, action: handlePrimaryAction)
+                        .buttonStyle(.borderedProminent)
 
-                Button("ラップ終了", action: handleFinishLap)
-                    .buttonStyle(.bordered)
-                    .disabled(stopwatch.state != .running)
+                    Button("ラップ終了", action: handleFinishLap)
+                        .buttonStyle(.bordered)
+                        .disabled(stopwatch.state != .running)
+                }
+
+                Spacer()
+
+                Button(action: handleReset) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .frame(width: 14, height: 14)
+                }
+                .frame(width: 32, height: 32)
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 8))
+                .help("リセット")
+                .accessibilityLabel("リセット")
+                .disabled(stopwatch.state == .idle)
             }
         }
         .padding(14)
@@ -193,6 +208,11 @@ struct SessionPopoverView: View {
     private func handleFinishLap() {
         commitActiveLapLabelEditIfNeeded()
         stopwatch.finishLap()
+    }
+
+    private func handleReset() {
+        commitActiveLapLabelEditIfNeeded()
+        stopwatch.resetToIdle()
     }
 
     private func beginLapLabelEdit(for lap: WorkLap) {
