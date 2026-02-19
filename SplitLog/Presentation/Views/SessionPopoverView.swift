@@ -13,6 +13,7 @@ struct SessionPopoverView: View {
     @StateObject private var stopwatch = StopwatchService()
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
+    @State private var editingFocusToken: Int = 0
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -60,6 +61,7 @@ struct SessionPopoverView: View {
                                                 if editingLapID == lap.id {
                                                     InlineLapLabelEditor(
                                                         text: $editingLapLabelDraft,
+                                                        focusToken: editingFocusToken,
                                                         onCommit: {
                                                             commitLapLabelEdit(lapID: lap.id)
                                                         }
@@ -212,6 +214,7 @@ struct SessionPopoverView: View {
 
         editingLapID = lap.id
         editingLapLabelDraft = lap.label
+        editingFocusToken += 1
     }
 
     private func commitLapLabelEdit(lapID: UUID) {
@@ -376,13 +379,16 @@ struct SessionPopoverView_Previews: PreviewProvider {
 
 private struct InlineLapLabelEditor: NSViewRepresentable {
     @Binding var text: String
+    let focusToken: Int
     let onCommit: () -> Void
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: InlineLapLabelEditor
         weak var textField: NSTextField?
         private var outsideClickMonitor: Any?
-        var didRequestInitialFocus = false
+        private var lastAppliedFocusToken: Int = -1
+        private var activeFocusRequestToken: Int = -1
+        private var isOutsideCommitEnabled = false
 
         init(parent: InlineLapLabelEditor) {
             self.parent = parent
@@ -397,6 +403,10 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
             parent.text = field.stringValue
         }
 
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            isOutsideCommitEnabled = true
+        }
+
         func controlTextDidEndEditing(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             parent.text = field.stringValue
@@ -408,7 +418,20 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
             guard outsideClickMonitor == nil else { return }
 
             outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
-                guard let self, let field = self.textField, let window = field.window else { return event }
+                guard let self else { return event }
+                guard
+                    let field = self.textField,
+                    let window = field.window
+                else {
+                    // Ignore clicks while the editor is not attached yet.
+                    return event
+                }
+
+                // Ignore clicks until initial focus is actually established.
+                guard self.isOutsideCommitEnabled else {
+                    return event
+                }
+
                 guard event.window === window else { return event }
 
                 let pointInField = field.convert(event.locationInWindow, from: nil)
@@ -421,10 +444,35 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
                     if editor.bounds.contains(pointInEditor) {
                         return event
                     }
+                    window.makeFirstResponder(nil)
+                    return event
                 }
 
-                window.makeFirstResponder(nil)
+                self.parent.onCommit()
                 return event
+            }
+        }
+
+        func requestInitialFocusIfNeeded(on field: NSTextField, token: Int) {
+            guard activeFocusRequestToken != token else { return }
+            activeFocusRequestToken = token
+            isOutsideCommitEnabled = false
+            requestFocus(on: field, token: token, remainingRetries: 8)
+        }
+
+        private func requestFocus(on field: NSTextField, token: Int, remainingRetries: Int) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self, weak field] in
+                guard let self, let field else { return }
+                guard self.parent.focusToken == token else { return }
+
+                if let window = field.window, window.makeFirstResponder(field) {
+                    self.lastAppliedFocusToken = token
+                    self.isOutsideCommitEnabled = true
+                    return
+                }
+
+                guard remainingRetries > 0 else { return }
+                self.requestFocus(on: field, token: token, remainingRetries: remainingRetries - 1)
             }
         }
 
@@ -463,11 +511,6 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
             nsView.stringValue = text
         }
 
-        guard !context.coordinator.didRequestInitialFocus else { return }
-        context.coordinator.didRequestInitialFocus = true
-        DispatchQueue.main.async {
-            guard nsView.window != nil else { return }
-            nsView.window?.makeFirstResponder(nsView)
-        }
+        context.coordinator.requestInitialFocusIfNeeded(on: nsView, token: focusToken)
     }
 }
