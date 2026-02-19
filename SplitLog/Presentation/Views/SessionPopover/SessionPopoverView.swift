@@ -36,7 +36,7 @@ struct SessionPopoverView: View {
         (255, 0, 64),
     ]
 
-    @StateObject private var stopwatch = StopwatchService()
+    @StateObject private var stopwatch: StopwatchService
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
@@ -45,6 +45,10 @@ struct SessionPopoverView: View {
     @State private var isShowingSessionOverflowList = false
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
+
+    init(stopwatch: StopwatchService = StopwatchService()) {
+        _stopwatch = StateObject(wrappedValue: stopwatch)
+    }
 
     var body: some View {
         let referenceDate = stopwatch.clock

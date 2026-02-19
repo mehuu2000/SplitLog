@@ -9,6 +9,18 @@ import Foundation
 import Testing
 @testable import SplitLog
 
+private final class InMemorySessionStore: @unchecked Sendable, SessionStore {
+    private var snapshot: StopwatchStorageSnapshot?
+
+    func saveSnapshot(_ snapshot: StopwatchStorageSnapshot?) throws {
+        self.snapshot = snapshot
+    }
+
+    func loadSnapshot() throws -> StopwatchStorageSnapshot? {
+        snapshot
+    }
+}
+
 struct SplitLogTests {
 
     @MainActor
@@ -422,6 +434,44 @@ struct SplitLogTests {
         #expect(service.elapsedLap(service.completedLaps[0]) == 10)
         #expect(service.elapsedCurrentLap(at: t4) == 20)
         #expect(service.elapsedSession() == 30)
+    }
+
+    @MainActor
+    @Test func restore_runningSnapshot_isNormalizedToStoppedWithoutOfflineDrift() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let checkAt = Date(timeIntervalSince1970: 1_200)
+
+        let source = StopwatchService(autoTick: false, sessionStore: store)
+        source.startSession(at: t0)
+        source.finishLap(at: t1) // persists while still running
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+
+        #expect(restored.state == .stopped)
+        #expect(restored.laps.count == 2)
+        #expect(restored.currentLap?.index == 2)
+        #expect(restored.elapsedSession(at: checkAt) == 10)
+        #expect(restored.elapsedCurrentLap(at: checkAt) == 0)
+    }
+
+    @MainActor
+    @Test func prepareForTermination_flushesLatestElapsedTimeToStore() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_015)
+        let checkAt = Date(timeIntervalSince1970: 1_200)
+
+        let source = StopwatchService(autoTick: false, sessionStore: store)
+        source.startSession(at: t0)
+        source.prepareForTermination(at: t1)
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+
+        #expect(restored.state == .stopped)
+        #expect(restored.elapsedSession(at: checkAt) == 15)
+        #expect(restored.elapsedCurrentLap(at: checkAt) == 15)
     }
 
 }

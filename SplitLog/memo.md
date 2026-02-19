@@ -201,3 +201,86 @@ SplitLog/
 4. セッション切替で詳細表示を差し替える処理実装
 5. 再開可能セッションの再開導線を接続
 6. テスト追加（採番、切替、保存/復元、単一アクティブ保証）
+
+## 12. 次フェーズ方針（ローカルストレージ完全化）
+
+### 12.1 目的
+
+- アプリ終了後も、次回起動時に直前の状態をそのまま再表示できるようにする
+- 履歴参照と作業再開の両方を成立させる
+- 表示に必要な情報を欠落なく保存する
+
+### 12.2 保存対象（表示に必要な情報の完全保存）
+
+- セッション一覧表示用
+  - `session.id`
+  - `session.title`
+  - `session.startedAt`
+  - `session.endedAt`
+- ラップ一覧表示用
+  - `lap.id`
+  - `lap.sessionId`
+  - `lap.index`
+  - `lap.startedAt`
+  - `lap.endedAt`
+  - `lap.accumulatedDuration`
+  - `lap.label`
+- 復元後の操作継続用
+  - `selectedSessionID`
+  - 各セッションの `selectedLapID`
+  - 各セッションの `state`
+  - `pauseStartedAt`
+  - `lastLapActivationAt`
+  - `completedPauseIntervals`
+  - `sessionOrder`
+  - `nextSessionNumber`
+- 永続フォーマット管理用
+  - `schemaVersion`
+  - `savedAt`
+
+### 12.3 ストレージ設計方針
+
+- 保存先は `Application Support/SplitLog/sessions.json` を継続
+- JSONは「単一スナップショット」で管理し、`Data.write(.atomic)` で原子的に置換
+- 復元は起動時1回、保存は状態更新の都度（将来的に必要ならデバウンスを追加）
+- 読み込み失敗時はクラッシュさせず、空状態から起動
+
+### 12.4 起動復元ルール
+
+- `sessionOrder` 順で一覧を復元
+- `selectedSessionID` が不正な場合は先頭セッションを選択
+- `selectedLapID` が不正な場合は `nil` に補正
+- `running` 復元時の扱いは仕様を固定する（下の要確認）
+
+### 12.5 既存実装との差分整理
+
+- 現在 `StopwatchService` 内に独自永続化（`PersistedState`）は存在
+- ただし `SessionStore` プロトコル経由の保存に未統合
+- 今フェーズでは以下を実施する
+  - 永続化責務を `SessionStore` 実装へ寄せる
+  - `StopwatchService` は保存要求と復元適用に専念
+  - 既存 `sessions.json` からの読み替え（移行）を用意して後方互換を維持
+
+### 12.6 実装順
+
+1. `SessionStore` 具象実装（`FileSessionStore`）作成
+2. 保存スキーマ `StorageSnapshot` を定義（`schemaVersion` 含む）
+3. `StopwatchService` の直接ファイルI/Oを `SessionStore` 呼び出しへ置換
+4. 既存 `PersistedState` から `StorageSnapshot` への移行ロジック追加
+5. 起動復元時の正規化処理（不正ID補正）を追加
+6. テスト追加（保存→復元、移行、破損データ時のフォールバック）
+
+### 12.7 要確認事項（実装前に仕様確定）
+
+1. 起動時に `running` セッションをどう扱うか  
+   - A: 自動で `stopped` にして再開待ち  
+   - B: 自動で `running` を継続
+2. `リセット` 時に履歴も全削除するか  
+   - A: 全削除  
+   - B: 選択中のみ初期化し履歴は残す
+3. 履歴の保持上限  
+   - A: 無制限  
+   - B: 件数上限（例: 100セッション）
+4. セッション削除時の扱い  
+   - A: 即時物理削除  
+   - B: 論理削除（将来復元可能）

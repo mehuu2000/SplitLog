@@ -28,7 +28,7 @@ final class StopwatchService: ObservableObject {
     private var sessionContexts: [UUID: SessionContext] = [:]
     private var sessionOrder: [UUID] = []
     private var nextSessionNumber: Int = 1
-    private let persistenceURL: URL?
+    private let sessionStore: SessionStore?
 
     private struct SessionContext: Codable, Sendable {
         var session: WorkSession
@@ -40,15 +40,19 @@ final class StopwatchService: ObservableObject {
         var completedPauseIntervals: [DateInterval]
     }
 
-    private struct PersistedState: Codable {
-        var contexts: [SessionContext]
-        var selectedSessionID: UUID?
-        var nextSessionNumber: Int
-    }
-
-    init(autoTick: Bool = true, persistenceEnabled: Bool = true) {
+    init(
+        autoTick: Bool = true,
+        persistenceEnabled: Bool = true,
+        sessionStore: SessionStore? = nil
+    ) {
         self.autoTick = autoTick
-        self.persistenceURL = persistenceEnabled ? Self.makePersistenceURL() : nil
+        if let sessionStore {
+            self.sessionStore = sessionStore
+        } else if persistenceEnabled {
+            self.sessionStore = FileSessionStore()
+        } else {
+            self.sessionStore = nil
+        }
         restorePersistedState()
         applySelectedContext()
     }
@@ -312,6 +316,23 @@ final class StopwatchService: ObservableObject {
         syncTimerForSelectedState()
     }
 
+    func prepareForTermination(at date: Date = Date()) {
+        guard !sessionContexts.isEmpty else { return }
+
+        for sessionID in sessionOrder {
+            guard var context = sessionContexts[sessionID], context.state == .running else { continue }
+            accumulateActiveDuration(in: &context, until: date)
+            context.state = .stopped
+            context.pauseStartedAt = date
+            context.lastLapActivationAt = nil
+            sessionContexts[sessionID] = context
+        }
+
+        clock = date
+        applySelectedContext()
+        persistState(savedAt: date)
+    }
+
     func elapsedSession(at referenceDate: Date? = nil) -> TimeInterval {
         guard let context = currentContext else { return 0 }
         return elapsedSession(in: context, at: referenceDate ?? clock)
@@ -551,18 +572,25 @@ final class StopwatchService: ObservableObject {
     }
 
     private func restorePersistedState() {
-        guard let persistenceURL else { return }
-        guard let data = try? Data(contentsOf: persistenceURL) else { return }
-        guard let restored = try? JSONDecoder().decode(PersistedState.self, from: data) else { return }
-
+        guard let sessionStore else { return }
+        guard let restoredSnapshot = try? sessionStore.loadSnapshot() else { return }
+        let restored = normalizedSnapshotForRestore(restoredSnapshot)
         var restoredContexts: [UUID: SessionContext] = [:]
         var restoredOrder: [UUID] = []
 
-        for context in restored.contexts {
+        for persistedContext in restored.contexts {
+            let context = sessionContext(from: persistedContext)
             let id = context.session.id
             guard restoredContexts[id] == nil else { continue }
             restoredContexts[id] = context
-            restoredOrder.append(id)
+        }
+
+        for sessionID in restored.sessionOrder where restoredContexts[sessionID] != nil {
+            restoredOrder.append(sessionID)
+        }
+
+        for sessionID in restoredContexts.keys where !restoredOrder.contains(sessionID) {
+            restoredOrder.append(sessionID)
         }
 
         sessionContexts = restoredContexts
@@ -576,42 +604,87 @@ final class StopwatchService: ObservableObject {
         }
     }
 
-    private func persistState() {
-        guard let persistenceURL else { return }
+    private func persistState(savedAt: Date? = nil) {
+        guard let sessionStore else { return }
 
-        let payload = PersistedState(
-            contexts: sessionOrder.compactMap { sessionContexts[$0] },
+        let timestamp = savedAt ?? clock
+        let payload = StopwatchStorageSnapshot(
+            savedAt: timestamp,
+            contexts: sessionOrder.compactMap { sessionContexts[$0] }.map { persistedContext(from: $0) },
+            sessionOrder: sessionOrder,
             selectedSessionID: selectedSessionID,
             nextSessionNumber: nextSessionNumber
         )
 
         do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(payload)
-            try data.write(to: persistenceURL, options: .atomic)
+            try sessionStore.saveSnapshot(payload)
         } catch {
             // Keep runtime behavior unchanged even if persistence fails.
         }
     }
 
     private func removePersistedState() {
-        guard let persistenceURL else { return }
-        try? FileManager.default.removeItem(at: persistenceURL)
+        guard let sessionStore else { return }
+        try? sessionStore.saveSnapshot(nil)
     }
 
-    private static func makePersistenceURL() -> URL? {
-        guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
-            return nil
+    private func persistedContext(from context: SessionContext) -> PersistedSessionContext {
+        PersistedSessionContext(
+            session: context.session,
+            laps: context.laps,
+            selectedLapID: context.selectedLapID,
+            state: context.state,
+            pauseStartedAt: context.pauseStartedAt,
+            lastLapActivationAt: context.lastLapActivationAt,
+            completedPauseIntervals: context.completedPauseIntervals
+        )
+    }
+
+    private func sessionContext(from context: PersistedSessionContext) -> SessionContext {
+        SessionContext(
+            session: context.session,
+            laps: context.laps,
+            selectedLapID: context.selectedLapID,
+            state: context.state,
+            pauseStartedAt: context.pauseStartedAt,
+            lastLapActivationAt: context.lastLapActivationAt,
+            completedPauseIntervals: context.completedPauseIntervals
+        )
+    }
+
+    private func normalizedSnapshotForRestore(_ snapshot: StopwatchStorageSnapshot) -> StopwatchStorageSnapshot {
+        var normalizedContexts: [PersistedSessionContext] = []
+        normalizedContexts.reserveCapacity(snapshot.contexts.count)
+
+        for persistedContext in snapshot.contexts {
+            var context = persistedContext
+            guard context.state == .running else {
+                normalizedContexts.append(context)
+                continue
+            }
+
+            if
+                let selectedLapID = context.selectedLapID,
+                let lastLapActivationAt = context.lastLapActivationAt,
+                snapshot.savedAt > lastLapActivationAt,
+                let lapIndex = context.laps.firstIndex(where: { $0.id == selectedLapID })
+            {
+                context.laps[lapIndex].accumulatedDuration += snapshot.savedAt.timeIntervalSince(lastLapActivationAt)
+            }
+
+            context.state = .stopped
+            context.pauseStartedAt = snapshot.savedAt
+            context.lastLapActivationAt = nil
+            normalizedContexts.append(context)
         }
 
-        let directory = appSupportURL.appendingPathComponent("SplitLog", isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        } catch {
-            return nil
-        }
-
-        return directory.appendingPathComponent("sessions.json")
+        return StopwatchStorageSnapshot(
+            schemaVersion: snapshot.schemaVersion,
+            savedAt: snapshot.savedAt,
+            contexts: normalizedContexts,
+            sessionOrder: snapshot.sessionOrder,
+            selectedSessionID: snapshot.selectedSessionID,
+            nextSessionNumber: snapshot.nextSessionNumber
+        )
     }
 }
