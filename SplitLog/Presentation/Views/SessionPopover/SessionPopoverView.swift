@@ -48,9 +48,10 @@ struct SessionPopoverView: View {
 
     var body: some View {
         let referenceDate = stopwatch.clock
+        let displayReferenceDate = Date(timeIntervalSince1970: floor(referenceDate.timeIntervalSince1970))
         let timeline = timelineSlices(referenceDate: referenceDate)
-        let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
-        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: referenceDate)
+        let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: displayReferenceDate))
+        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: displayReferenceDate)
 
         ZStack {
             VStack(alignment: .leading, spacing: 14) {
