@@ -14,6 +14,7 @@ struct SessionPopoverView: View {
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
+    @State private var isShowingResetConfirmation = false
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -23,124 +24,165 @@ struct SessionPopoverView: View {
         let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
         let lapDisplayedSeconds = displayedLapSeconds(referenceDate: referenceDate, totalElapsedSeconds: totalElapsedSeconds)
 
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("SplitLog", systemImage: "timer")
-                    .font(.headline)
-                Spacer()
-                Text(stateText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+        ZStack {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("SplitLog", systemImage: "timer")
+                        .font(.headline)
+                    Spacer()
+                    Text(stateText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
 
-            Divider()
+                Divider()
 
-            statusRow(title: "全体経過", value: formatDuration(seconds: totalElapsedSeconds))
+                statusRow(title: "全体経過", value: formatDuration(seconds: totalElapsedSeconds))
 
-            HStack(alignment: .top, spacing: 16) {
-                SessionTimelineRingView(
-                    innerSlices: timeline.inner,
-                    outerSlices: timeline.outer,
-                    showOuterTrack: timeline.showOuterTrack
-                )
-                .frame(width: 210, height: 210)
+                HStack(alignment: .top, spacing: 16) {
+                    SessionTimelineRingView(
+                        innerSlices: timeline.inner,
+                        outerSlices: timeline.outer,
+                        showOuterTrack: timeline.showOuterTrack
+                    )
+                    .frame(width: 210, height: 210)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    if stopwatch.laps.isEmpty {
-                        Text("ラップはまだありません")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                    } else {
-                        ScrollViewReader { proxy in
-                            ScrollView(showsIndicators: false) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    ForEach(stopwatch.laps) { lap in
-                                        let color = lapColor(for: lap.index)
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            HStack {
-                                                if editingLapID == lap.id {
-                                                    InlineLapLabelEditor(
-                                                        text: $editingLapLabelDraft,
-                                                        focusToken: editingFocusToken,
-                                                        onCommit: {
-                                                            commitLapLabelEdit(lapID: lap.id)
-                                                        }
-                                                    )
-                                                    .frame(minWidth: 96, maxWidth: 220, alignment: .leading)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(
-                                                        RoundedRectangle(cornerRadius: 4)
-                                                            .fill(Color.white.opacity(0.9))
-                                                    )
-                                                } else {
-                                                    Text("\(lap.label)：")
-                                                        .fontWeight(.medium)
+                    VStack(alignment: .leading, spacing: 8) {
+                        if stopwatch.laps.isEmpty {
+                            Text("ラップはまだありません")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        } else {
+                            ScrollViewReader { proxy in
+                                ScrollView(showsIndicators: false) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ForEach(stopwatch.laps) { lap in
+                                            let color = lapColor(for: lap.index)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                HStack {
+                                                    if editingLapID == lap.id {
+                                                        InlineLapLabelEditor(
+                                                            text: $editingLapLabelDraft,
+                                                            focusToken: editingFocusToken,
+                                                            onCommit: {
+                                                                commitLapLabelEdit(lapID: lap.id)
+                                                            }
+                                                        )
+                                                        .frame(minWidth: 96, maxWidth: 220, alignment: .leading)
+                                                        .padding(.horizontal, 6)
+                                                        .padding(.vertical, 2)
+                                                        .background(
+                                                            RoundedRectangle(cornerRadius: 4)
+                                                                .fill(Color.white.opacity(0.9))
+                                                        )
+                                                    } else {
+                                                        Text("\(lap.label)：")
+                                                            .fontWeight(.medium)
+                                                            .foregroundStyle(Color.black)
+                                                            .contentShape(Rectangle())
+                                                            .onTapGesture {
+                                                                beginLapLabelEdit(for: lap)
+                                                            }
+                                                    }
+
+                                                    Spacer()
+                                                    Text(formatDuration(seconds: lapDisplayedSeconds[lap.id] ?? 0))
+                                                        .monospacedDigit()
                                                         .foregroundStyle(Color.black)
-                                                        .contentShape(Rectangle())
-                                                        .onTapGesture {
-                                                            beginLapLabelEdit(for: lap)
-                                                        }
                                                 }
 
-                                                Spacer()
-                                                Text(formatDuration(seconds: lapDisplayedSeconds[lap.id] ?? 0))
-                                                    .monospacedDigit()
-                                                    .foregroundStyle(Color.black)
+                                                Rectangle()
+                                                    .fill(color)
+                                                    .frame(height: 2)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 1))
                                             }
-
-                                            Rectangle()
-                                                .fill(color)
-                                                .frame(height: 2)
-                                                .clipShape(RoundedRectangle(cornerRadius: 1))
+                                            .id(lap.id)
                                         }
-                                        .id(lap.id)
                                     }
                                 }
-                            }
-                            .onChange(of: stopwatch.laps.count) { _, _ in
-                                guard let lastID = stopwatch.laps.last?.id else { return }
-                                DispatchQueue.main.async {
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        proxy.scrollTo(lastID, anchor: .bottom)
+                                .onChange(of: stopwatch.laps.count) { _, _ in
+                                    guard let lastID = stopwatch.laps.last?.id else { return }
+                                    DispatchQueue.main.async {
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            proxy.scrollTo(lastID, anchor: .bottom)
+                                        }
                                     }
                                 }
                             }
                         }
+
+                        Text(subtitleText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack {
+                    HStack(spacing: 10) {
+                        Button(primaryActionButtonTitle, action: handlePrimaryAction)
+                            .buttonStyle(.borderedProminent)
+
+                        Button("ラップ終了", action: handleFinishLap)
+                            .buttonStyle(.bordered)
+                            .disabled(stopwatch.state != .running)
                     }
 
-                    Text(subtitleText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 2)
+                    Spacer()
+
+                    Button(action: requestReset) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .frame(width: 14, height: 14)
+                    }
+                    .frame(width: 32, height: 32)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .help("リセット")
+                    .accessibilityLabel("リセット")
+                    .disabled(stopwatch.state == .idle)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
 
-            Spacer(minLength: 8)
+            if isShowingResetConfirmation {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isShowingResetConfirmation = false
+                    }
 
-            HStack {
-                HStack(spacing: 10) {
-                    Button(primaryActionButtonTitle, action: handlePrimaryAction)
-                        .buttonStyle(.borderedProminent)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("リセットしますか？")
+                        .font(.headline)
+                    Text("現在のセッションとラップを初期状態に戻します。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                    Button("ラップ終了", action: handleFinishLap)
+                    HStack {
+                        Spacer()
+                        Button("キャンセル") {
+                            isShowingResetConfirmation = false
+                        }
                         .buttonStyle(.bordered)
-                        .disabled(stopwatch.state != .running)
-                }
 
-                Spacer()
-
-                Button(action: handleReset) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .frame(width: 14, height: 14)
+                        Button("リセット", role: .destructive) {
+                            isShowingResetConfirmation = false
+                            handleReset()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
-                .frame(width: 32, height: 32)
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.roundedRectangle(radius: 8))
-                .help("リセット")
-                .accessibilityLabel("リセット")
-                .disabled(stopwatch.state == .idle)
+                .padding(14)
+                .frame(width: 320)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                )
             }
         }
         .padding(14)
@@ -208,6 +250,10 @@ struct SessionPopoverView: View {
     private func handleFinishLap() {
         commitActiveLapLabelEditIfNeeded()
         stopwatch.finishLap()
+    }
+
+    private func requestReset() {
+        isShowingResetConfirmation = true
     }
 
     private func handleReset() {
