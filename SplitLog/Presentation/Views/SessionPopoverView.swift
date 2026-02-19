@@ -22,7 +22,7 @@ struct SessionPopoverView: View {
         let referenceDate = stopwatch.clock
         let timeline = timelineSlices(referenceDate: referenceDate)
         let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
-        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: referenceDate, totalElapsedSeconds: totalElapsedSeconds)
+        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: referenceDate)
 
         ZStack {
             VStack(alignment: .leading, spacing: 14) {
@@ -60,6 +60,18 @@ struct SessionPopoverView: View {
                                             let color = lapColor(for: lap.index)
                                             VStack(alignment: .leading, spacing: 2) {
                                                 HStack {
+                                                    Button {
+                                                        handleSelectLap(lapID: lap.id)
+                                                    } label: {
+                                                        Image(systemName: stopwatch.selectedLapID == lap.id ? "largecircle.fill.circle" : "circle")
+                                                            .font(.system(size: 11, weight: .medium))
+                                                            .foregroundStyle(Color.black)
+                                                            .frame(width: 16, height: 16)
+                                                    }
+                                                    .buttonStyle(.plain)
+                                                    .frame(width: 18, height: 18)
+                                                    .contentShape(Rectangle())
+
                                                     if editingLapID == lap.id {
                                                         InlineLapLabelEditor(
                                                             text: $editingLapLabelDraft,
@@ -252,6 +264,11 @@ struct SessionPopoverView: View {
         stopwatch.finishLap()
     }
 
+    private func handleSelectLap(lapID: UUID) {
+        commitActiveLapLabelEditIfNeeded()
+        stopwatch.selectLap(lapID: lapID)
+    }
+
     private func requestReset() {
         isShowingResetConfirmation = true
     }
@@ -294,10 +311,12 @@ struct SessionPopoverView: View {
             return ([], [], false)
         }
 
+        let lapRanges = lapCumulativeRanges(referenceDate: referenceDate)
+
         if elapsed < ringBlockDuration {
             let innerWindow = 0..<ringBlockDuration
             return (
-                buildSlices(in: innerWindow, referenceDate: referenceDate, windowID: "inner"),
+                buildSlices(in: innerWindow, lapRanges: lapRanges, windowID: "inner"),
                 [],
                 false
             )
@@ -308,24 +327,35 @@ struct SessionPopoverView: View {
         let outerWindow = currentBlockStart..<(currentBlockStart + ringBlockDuration)
 
         return (
-            buildSlices(in: innerWindow, referenceDate: referenceDate, windowID: "inner"),
-            buildSlices(in: outerWindow, referenceDate: referenceDate, windowID: "outer"),
+            buildSlices(in: innerWindow, lapRanges: lapRanges, windowID: "inner"),
+            buildSlices(in: outerWindow, lapRanges: lapRanges, windowID: "outer"),
             true
         )
     }
 
+    private func lapCumulativeRanges(referenceDate: Date) -> [(lap: WorkLap, start: TimeInterval, end: TimeInterval)] {
+        var ranges: [(lap: WorkLap, start: TimeInterval, end: TimeInterval)] = []
+        var cursor: TimeInterval = 0
+
+        for lap in stopwatch.laps {
+            let duration = max(0, stopwatch.elapsedLap(lap, at: referenceDate))
+            let start = cursor
+            let end = start + duration
+            ranges.append((lap: lap, start: start, end: end))
+            cursor = end
+        }
+
+        return ranges
+    }
+
     private func buildSlices(
         in window: Range<TimeInterval>,
-        referenceDate: Date,
+        lapRanges: [(lap: WorkLap, start: TimeInterval, end: TimeInterval)],
         windowID: String
     ) -> [TimelineRingSlice] {
-        stopwatch.laps.compactMap { lap in
-            let lapStart = max(0, stopwatch.activeTimelineOffset(at: lap.startedAt))
-            let rawLapEnd = stopwatch.activeTimelineOffset(at: lap.endedAt ?? referenceDate)
-            let lapEnd = max(lapStart, rawLapEnd)
-
-            let start = max(lapStart, window.lowerBound)
-            let end = min(lapEnd, window.upperBound)
+        lapRanges.compactMap { range in
+            let start = max(range.start, window.lowerBound)
+            let end = min(range.end, window.upperBound)
 
             guard end > start else { return nil }
 
@@ -333,10 +363,10 @@ struct SessionPopoverView: View {
             let endRatio = (end - window.lowerBound) / ringBlockDuration
 
             return TimelineRingSlice(
-                id: "\(windowID)-\(lap.id)-\(startRatio)-\(endRatio)",
+                id: "\(windowID)-\(range.lap.id)-\(startRatio)-\(endRatio)",
                 startRatio: startRatio,
                 endRatio: endRatio,
-                color: lapColor(for: lap.index)
+                color: lapColor(for: range.lap.index)
             )
         }
     }
@@ -381,22 +411,12 @@ struct SessionPopoverView: View {
         )
     }
 
-    private func displayedLapSeconds(referenceDate: Date, totalElapsedSeconds: Int) -> [UUID: Int] {
-        var secondsByLapID: [UUID: Int] = [:]
-        var completedTotalSeconds = 0
-
-        for lap in stopwatch.laps {
-            if lap.endedAt != nil {
-                let lapSeconds = durationSeconds(stopwatch.elapsedLap(lap, at: referenceDate))
-                secondsByLapID[lap.id] = lapSeconds
-                completedTotalSeconds += lapSeconds
-                continue
+    private func displayedLapSeconds(referenceDate: Date) -> [UUID: Int] {
+        Dictionary(
+            uniqueKeysWithValues: stopwatch.laps.map { lap in
+                (lap.id, durationSeconds(stopwatch.elapsedLap(lap, at: referenceDate)))
             }
-
-            secondsByLapID[lap.id] = max(0, totalElapsedSeconds - completedTotalSeconds)
-        }
-
-        return secondsByLapID
+        )
     }
 
     private func formatDuration(seconds totalSeconds: Int) -> String {

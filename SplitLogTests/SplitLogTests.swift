@@ -24,7 +24,7 @@ struct SplitLogTests {
         #expect(service.laps.count == 1)
         #expect(service.laps[0].index == 1)
         #expect(service.laps[0].label == "作業1")
-        #expect(service.currentLap?.endedAt == nil)
+        #expect(service.currentLap?.id == service.laps[0].id)
     }
 
     @MainActor
@@ -41,7 +41,69 @@ struct SplitLogTests {
         #expect(service.laps[1].index == 2)
         #expect(service.laps[1].startedAt == t1)
         #expect(service.laps[1].endedAt == nil)
+        #expect(service.currentLap?.id == service.laps[1].id)
         #expect(service.elapsedLap(service.laps[0]) == 40)
+    }
+
+    @MainActor
+    @Test func selectLap_whileRunning_switchesElapsedTargetLap() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+
+        service.startSession(at: t0)
+        service.finishLap(at: t1) // lap2 selected and running
+        service.selectLap(lapID: service.laps[0].id, at: t2)
+
+        #expect(service.currentLap?.id == service.laps[0].id)
+        #expect(service.elapsedLap(service.laps[0], at: t3) == 20)
+        #expect(service.elapsedLap(service.laps[1], at: t3) == 10)
+        #expect(service.elapsedSession(at: t3) == 30)
+    }
+
+    @MainActor
+    @Test func finishLap_fromOlderSelectedLap_createsNextMaxIndexLap() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+        let t4 = Date(timeIntervalSince1970: 1_040)
+
+        service.startSession(at: t0)     // lap1
+        service.finishLap(at: t1)        // lap2
+        service.finishLap(at: t2)        // lap3
+        service.selectLap(lapID: service.laps[0].id, at: t3) // select lap1
+
+        service.finishLap(at: t4)
+
+        #expect(service.laps.count == 4)
+        #expect(service.laps.map(\.index) == [1, 2, 3, 4])
+        #expect(service.currentLap?.index == 4)
+    }
+
+    @MainActor
+    @Test func selectLap_whileStopped_appliesSelectionOnResume() {
+        let service = StopwatchService(autoTick: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+        let t4 = Date(timeIntervalSince1970: 1_040)
+        let t5 = Date(timeIntervalSince1970: 1_050)
+
+        service.startSession(at: t0)
+        service.finishLap(at: t1) // lap2 selected
+        service.finishSession(at: t2) // stopped while lap2 selected
+        service.selectLap(lapID: service.laps[0].id, at: t3) // switch during stopped
+        service.resumeSession(at: t4)
+
+        #expect(service.currentLap?.id == service.laps[0].id)
+        #expect(service.elapsedLap(service.laps[0], at: t5) == 20)
+        #expect(service.elapsedLap(service.laps[1], at: t5) == 10)
+        #expect(service.elapsedSession(at: t5) == 30)
     }
 
     @MainActor

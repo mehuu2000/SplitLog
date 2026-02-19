@@ -27,5 +27,6 @@ struct WorkLap: Identifiable, Equatable, Codable, Sendable {
     let index: Int
     let startedAt: Date
     var endedAt: Date?
+    var accumulatedDuration: TimeInterval
     var label: String
 }
