@@ -74,11 +74,17 @@ struct InlineLapLabelEditor: NSViewRepresentable {
                     if editor.bounds.contains(pointInEditor) {
                         return event
                     }
-                    window.makeFirstResponder(nil)
+                    // Defer responder updates out of the current mouse event dispatch
+                    // to avoid QoS inversion warnings from Thread Performance Checker.
+                    DispatchQueue.main.async {
+                        window.makeFirstResponder(nil)
+                    }
                     return event
                 }
 
-                self.parent.onCommit()
+                DispatchQueue.main.async {
+                    self.parent.onCommit()
+                }
                 return event
             }
         }
