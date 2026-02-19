@@ -22,6 +22,7 @@ struct SessionTimelineRingView: View {
     private let innerLineWidth: CGFloat = 30
     private let outerLineWidth: CGFloat = 30
     private let segmentBoundaryLineWidth: CGFloat = 1
+    private let perimeterBorderLineWidth: CGFloat = 2
     private let contactBorderOutwardOffset: CGFloat = 3
     private let ringDiameterInset: CGFloat = 16
 
@@ -79,8 +80,18 @@ struct SessionTimelineRingView: View {
                 innerPerimeterBorder(
                     frameSide: showOuterTrack ? ringSide : innerSide,
                     ringLineWidth: showOuterTrack ? outerLineWidth : innerLineWidth,
-                    outwardOffset: showOuterTrack ? contactBorderOutwardOffset : 0
+                    outwardOffset: showOuterTrack ? contactBorderOutwardOffset : 0,
+                    lineWidth: showOuterTrack ? segmentBoundaryLineWidth : perimeterBorderLineWidth
                 )
+
+                if showOuterTrack {
+                    innerPerimeterBorder(
+                        frameSide: innerSide,
+                        ringLineWidth: innerLineWidth,
+                        outwardOffset: 0,
+                        lineWidth: perimeterBorderLineWidth
+                    )
+                }
             }
             .frame(width: side, height: side)
         }
@@ -117,27 +128,28 @@ struct SessionTimelineRingView: View {
         Circle()
             .stroke(
                 Color.white,
-                style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
+                style: StrokeStyle(lineWidth: perimeterBorderLineWidth, lineCap: .round)
             )
             .frame(
-                width: frameSide + ringLineWidth + segmentBoundaryLineWidth,
-                height: frameSide + ringLineWidth + segmentBoundaryLineWidth
+                width: frameSide + ringLineWidth + perimeterBorderLineWidth,
+                height: frameSide + ringLineWidth + perimeterBorderLineWidth
             )
     }
 
     private func innerPerimeterBorder(
         frameSide: CGFloat,
         ringLineWidth: CGFloat,
-        outwardOffset: CGFloat
+        outwardOffset: CGFloat,
+        lineWidth: CGFloat
     ) -> some View {
         Circle()
             .stroke(
                 Color.white,
-                style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
             )
             .frame(
-                width: max(0, frameSide - ringLineWidth - segmentBoundaryLineWidth + (outwardOffset * 2)),
-                height: max(0, frameSide - ringLineWidth - segmentBoundaryLineWidth + (outwardOffset * 2))
+                width: max(0, frameSide - ringLineWidth - lineWidth + (outwardOffset * 2)),
+                height: max(0, frameSide - ringLineWidth - lineWidth + (outwardOffset * 2))
             )
     }
 
