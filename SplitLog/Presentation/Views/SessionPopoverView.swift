@@ -65,9 +65,14 @@ struct SessionPopoverView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         if stopwatch.laps.isEmpty {
-                            Text("ラップはまだありません")
-                                .foregroundStyle(.secondary)
-                                .font(.subheadline)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("ラップはまだありません")
+                                    .foregroundStyle(.secondary)
+                                    .font(.subheadline)
+                                Text("作業を開始して下さい")
+                                    .foregroundStyle(.secondary)
+                                    .font(.caption)
+                            }
                         } else {
                             ScrollViewReader { proxy in
                                 ScrollView(showsIndicators: false) {
@@ -139,10 +144,12 @@ struct SessionPopoverView: View {
                             }
                         }
 
-                        Text(subtitleText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 2)
+                        if !subtitleText.isEmpty {
+                            Text(subtitleText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 2)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -385,7 +392,8 @@ struct SessionPopoverView: View {
     }
 
     private var subtitleText: String {
-        stopwatchStateText
+        guard !stopwatch.laps.isEmpty else { return "" }
+        return stopwatchStateText
     }
 
     private var stopwatchStateText: String {
