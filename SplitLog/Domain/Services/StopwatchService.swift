@@ -69,10 +69,7 @@ final class StopwatchService: ObservableObject {
         sessionContexts[context.session.id] = context
         sessionOrder.insert(context.session.id, at: 0)
         selectedSessionID = context.session.id
-        clock = date
-
-        applySelectedContext()
-        persistState()
+        commitSelectionUpdate(at: date)
     }
 
     func selectSession(sessionID: UUID, at date: Date = Date()) {
@@ -83,9 +80,7 @@ final class StopwatchService: ObservableObject {
         stopRunningSessions(except: sessionID, at: date)
 
         selectedSessionID = sessionID
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectionUpdate(at: date)
     }
 
     func sessionState(for sessionID: UUID) -> SessionState {
@@ -98,9 +93,7 @@ final class StopwatchService: ObservableObject {
             sessionContexts[newContext.session.id] = newContext
             sessionOrder.insert(newContext.session.id, at: 0)
             selectedSessionID = newContext.session.id
-            clock = date
-            applySelectedContext()
-            persistState()
+            commitSelectionUpdate(at: date)
             return
         }
 
@@ -123,9 +116,7 @@ final class StopwatchService: ObservableObject {
             sessionContexts[selectedSessionID] = context
         }
 
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func finishLap(at date: Date = Date()) {
@@ -159,10 +150,7 @@ final class StopwatchService: ObservableObject {
         context.selectedLapID = nextLap.id
         context.lastLapActivationAt = date
 
-        sessionContexts[selectedSessionID] = context
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func selectLap(lapID: UUID, at date: Date = Date()) {
@@ -185,10 +173,7 @@ final class StopwatchService: ObservableObject {
             return
         }
 
-        sessionContexts[selectedSessionID] = context
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func pauseSession(at date: Date = Date()) {
@@ -205,10 +190,7 @@ final class StopwatchService: ObservableObject {
         context.pauseStartedAt = date
         context.lastLapActivationAt = nil
 
-        sessionContexts[selectedSessionID] = context
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func resumeSession(at date: Date = Date()) {
@@ -223,10 +205,7 @@ final class StopwatchService: ObservableObject {
         stopRunningSessions(except: context.session.id, at: date)
         resume(context: &context, at: date)
 
-        sessionContexts[selectedSessionID] = context
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func finishSession(at date: Date = Date()) {
@@ -250,10 +229,7 @@ final class StopwatchService: ObservableObject {
         context.state = .stopped
         context.lastLapActivationAt = nil
 
-        sessionContexts[selectedSessionID] = context
-        clock = stoppedAt
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: stoppedAt)
     }
 
     func resetToIdle() {
@@ -285,10 +261,7 @@ final class StopwatchService: ObservableObject {
         context.lastLapActivationAt = nil
         context.completedPauseIntervals = []
 
-        sessionContexts[selectedSessionID] = context
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
     func deleteSelectedSession(at date: Date = Date()) {
@@ -309,9 +282,7 @@ final class StopwatchService: ObservableObject {
 
         let preferredIndex = max(0, removedIndex - 1)
         self.selectedSessionID = sessionOrder[preferredIndex]
-        clock = date
-        applySelectedContext()
-        persistState()
+        commitSelectionUpdate(at: date)
     }
 
     func updateLapLabel(lapID: UUID, label: String) {
@@ -370,6 +341,24 @@ final class StopwatchService: ObservableObject {
     private var currentContext: SessionContext? {
         guard let selectedSessionID else { return nil }
         return sessionContexts[selectedSessionID]
+    }
+
+    private func commitSelectedContextUpdate(
+        _ context: SessionContext,
+        for sessionID: UUID,
+        at date: Date,
+        persist: Bool = true
+    ) {
+        sessionContexts[sessionID] = context
+        commitSelectionUpdate(at: date, persist: persist)
+    }
+
+    private func commitSelectionUpdate(at date: Date, persist: Bool = true) {
+        clock = date
+        applySelectedContext()
+        if persist {
+            persistState()
+        }
     }
 
     private func applySelectedContext() {

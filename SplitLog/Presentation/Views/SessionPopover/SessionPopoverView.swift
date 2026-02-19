@@ -9,6 +9,33 @@ import SwiftUI
 
 @MainActor
 struct SessionPopoverView: View {
+    private static let rgbWheel: [(Double, Double, Double)] = [
+        (255, 0, 0),
+        (255, 64, 0),
+        (255, 128, 0),
+        (255, 192, 0),
+        (255, 255, 0),
+        (192, 255, 0),
+        (128, 255, 0),
+        (64, 255, 0),
+        (0, 255, 0),
+        (0, 255, 64),
+        (0, 255, 128),
+        (0, 255, 192),
+        (0, 255, 255),
+        (0, 192, 255),
+        (0, 128, 255),
+        (0, 64, 255),
+        (0, 0, 255),
+        (64, 0, 255),
+        (128, 0, 255),
+        (192, 0, 255),
+        (255, 0, 255),
+        (255, 0, 192),
+        (255, 0, 128),
+        (255, 0, 64),
+    ]
+
     @StateObject private var stopwatch = StopwatchService()
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
@@ -375,37 +402,10 @@ struct SessionPopoverView: View {
     }
 
     private func lapColor(for index: Int) -> Color {
-        let rgbWheel: [(Double, Double, Double)] = [
-            (255, 0, 0),
-            (255, 64, 0),
-            (255, 128, 0),
-            (255, 192, 0),
-            (255, 255, 0),
-            (192, 255, 0),
-            (128, 255, 0),
-            (64, 255, 0),
-            (0, 255, 0),
-            (0, 255, 64),
-            (0, 255, 128),
-            (0, 255, 192),
-            (0, 255, 255),
-            (0, 192, 255),
-            (0, 128, 255),
-            (0, 64, 255),
-            (0, 0, 255),
-            (64, 0, 255),
-            (128, 0, 255),
-            (192, 0, 255),
-            (255, 0, 255),
-            (255, 0, 192),
-            (255, 0, 128),
-            (255, 0, 64),
-        ]
-
         let zeroBasedIndex = max(0, index - 1)
-        let cycle = zeroBasedIndex / rgbWheel.count
-        let paletteIndex = (zeroBasedIndex + cycle) % rgbWheel.count
-        let rgb = rgbWheel[paletteIndex]
+        let cycle = zeroBasedIndex / Self.rgbWheel.count
+        let paletteIndex = (zeroBasedIndex + cycle) % Self.rgbWheel.count
+        let rgb = Self.rgbWheel[paletteIndex]
 
         return Color(
             red: rgb.0 / 255.0,
