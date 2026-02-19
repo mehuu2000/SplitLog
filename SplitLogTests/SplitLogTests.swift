@@ -19,6 +19,10 @@ private final class InMemorySessionStore: @unchecked Sendable, SessionStore {
     func loadSnapshot() throws -> StopwatchStorageSnapshot? {
         snapshot
     }
+
+    func overwriteSnapshot(_ snapshot: StopwatchStorageSnapshot?) {
+        self.snapshot = snapshot
+    }
 }
 
 struct SplitLogTests {
@@ -477,6 +481,110 @@ struct SplitLogTests {
         #expect(restored.state == .stopped)
         #expect(restored.elapsedSession(at: checkAt) == 15)
         #expect(restored.elapsedCurrentLap(at: checkAt) == 15)
+    }
+
+    @MainActor
+    @Test func restore_duplicateSessionOrder_isDeduplicatedKeepingFirstSeenOrder() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+
+        let session1 = WorkSession(id: UUID(), title: "セッション1", startedAt: t0, endedAt: nil)
+        let session2 = WorkSession(id: UUID(), title: "セッション2", startedAt: t0, endedAt: nil)
+
+        let context1 = PersistedSessionContext(
+            session: session1,
+            laps: [],
+            selectedLapID: nil,
+            state: .idle,
+            pauseStartedAt: nil,
+            lastLapActivationAt: nil,
+            completedPauseIntervals: []
+        )
+        let context2 = PersistedSessionContext(
+            session: session2,
+            laps: [],
+            selectedLapID: nil,
+            state: .idle,
+            pauseStartedAt: nil,
+            lastLapActivationAt: nil,
+            completedPauseIntervals: []
+        )
+
+        store.overwriteSnapshot(
+            StopwatchStorageSnapshot(
+                savedAt: t0,
+                contexts: [context1, context2],
+                sessionOrder: [session2.id, session2.id, session1.id, session2.id],
+                selectedSessionID: session2.id,
+                nextSessionNumber: 3
+            )
+        )
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+
+        #expect(restored.sessions.count == 2)
+        #expect(restored.sessions.map(\.id) == [session2.id, session1.id])
+    }
+
+    @MainActor
+    @Test func restore_invalidSelectedLapID_fallsBackToValidLapAndAllowsFinishLap() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+        let t4 = Date(timeIntervalSince1970: 1_040)
+
+        let sessionID = UUID()
+        let session = WorkSession(id: sessionID, title: "セッション1", startedAt: t0, endedAt: nil)
+        let lap1 = WorkLap(
+            id: UUID(),
+            sessionId: sessionID,
+            index: 1,
+            startedAt: t0,
+            endedAt: t1,
+            accumulatedDuration: 10,
+            label: "作業1"
+        )
+        let lap2 = WorkLap(
+            id: UUID(),
+            sessionId: sessionID,
+            index: 2,
+            startedAt: t1,
+            endedAt: nil,
+            accumulatedDuration: 10,
+            label: "作業2"
+        )
+
+        let corruptedContext = PersistedSessionContext(
+            session: session,
+            laps: [lap1, lap2],
+            selectedLapID: UUID(), // not found in laps
+            state: .stopped,
+            pauseStartedAt: t2,
+            lastLapActivationAt: nil,
+            completedPauseIntervals: []
+        )
+
+        store.overwriteSnapshot(
+            StopwatchStorageSnapshot(
+                savedAt: t2,
+                contexts: [corruptedContext],
+                sessionOrder: [sessionID],
+                selectedSessionID: sessionID,
+                nextSessionNumber: 2
+            )
+        )
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+        #expect(restored.currentLap?.id == lap2.id)
+
+        restored.resumeSession(at: t3)
+        restored.finishLap(at: t4)
+
+        #expect(restored.state == .running)
+        #expect(restored.laps.count == 3)
+        #expect(restored.currentLap?.index == 3)
     }
 
 }

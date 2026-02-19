@@ -582,20 +582,24 @@ final class StopwatchService: ObservableObject {
             restoreDate: restoreReferenceDate ?? Date()
         )
         var restoredContexts: [UUID: SessionContext] = [:]
+        var restoredContextOrder: [UUID] = []
         var restoredOrder: [UUID] = []
+        var seenOrderedSessionIDs: Set<UUID> = []
 
         for persistedContext in restored.contexts {
             let context = sessionContext(from: persistedContext)
             let id = context.session.id
             guard restoredContexts[id] == nil else { continue }
             restoredContexts[id] = context
+            restoredContextOrder.append(id)
         }
 
         for sessionID in restored.sessionOrder where restoredContexts[sessionID] != nil {
+            guard seenOrderedSessionIDs.insert(sessionID).inserted else { continue }
             restoredOrder.append(sessionID)
         }
 
-        for sessionID in restoredContexts.keys where !restoredOrder.contains(sessionID) {
+        for sessionID in restoredContextOrder where seenOrderedSessionIDs.insert(sessionID).inserted {
             restoredOrder.append(sessionID)
         }
 
@@ -647,15 +651,34 @@ final class StopwatchService: ObservableObject {
     }
 
     private func sessionContext(from context: PersistedSessionContext) -> SessionContext {
-        SessionContext(
+        let selectedLapID = normalizedSelectedLapID(context.selectedLapID, in: context.laps)
+        return SessionContext(
             session: context.session,
             laps: context.laps,
-            selectedLapID: context.selectedLapID,
+            selectedLapID: selectedLapID,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
             lastLapActivationAt: context.lastLapActivationAt,
             completedPauseIntervals: context.completedPauseIntervals
         )
+    }
+
+    private func normalizedSelectedLapID(_ selectedLapID: UUID?, in laps: [WorkLap]) -> UUID? {
+        guard !laps.isEmpty else { return nil }
+
+        if let selectedLapID, laps.contains(where: { $0.id == selectedLapID }) {
+            return selectedLapID
+        }
+
+        if let unfinishedLapID = laps
+            .filter({ $0.endedAt == nil })
+            .max(by: { $0.index < $1.index })?
+            .id
+        {
+            return unfinishedLapID
+        }
+
+        return laps.max(by: { $0.index < $1.index })?.id
     }
 
     private func normalizedSnapshotForRestore(
