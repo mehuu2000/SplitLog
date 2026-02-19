@@ -21,6 +21,7 @@ struct SessionTimelineRingView: View {
 
     private let innerLineWidth: CGFloat = 34
     private let outerLineWidth: CGFloat = 26
+    private let segmentBoundaryLineWidth: CGFloat = 1
 
     var body: some View {
         GeometryReader { proxy in
@@ -35,12 +36,18 @@ struct SessionTimelineRingView: View {
                         .frame(width: side, height: side)
 
                     ForEach(outerSlices) { slice in
-                        Circle()
-                            .trim(from: clampedRatio(slice.startRatio), to: clampedRatio(slice.endRatio))
-                            .stroke(slice.color, style: StrokeStyle(lineWidth: outerLineWidth, lineCap: .butt))
-                            .rotationEffect(.degrees(-90))
-                            .frame(width: side, height: side)
+                        ringSlice(
+                            slice: slice,
+                            lineWidth: outerLineWidth,
+                            frameSide: side
+                        )
                     }
+
+                    segmentBoundaries(
+                        ratios: boundaryRatios(for: outerSlices),
+                        lineWidth: outerLineWidth,
+                        frameSide: side
+                    )
                 }
 
                 Circle()
@@ -48,15 +55,111 @@ struct SessionTimelineRingView: View {
                     .frame(width: innerSide, height: innerSide)
 
                 ForEach(innerSlices) { slice in
-                    Circle()
-                        .trim(from: clampedRatio(slice.startRatio), to: clampedRatio(slice.endRatio))
-                        .stroke(slice.color, style: StrokeStyle(lineWidth: innerLineWidth, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: innerSide, height: innerSide)
+                    ringSlice(
+                        slice: slice,
+                        lineWidth: innerLineWidth,
+                        frameSide: innerSide
+                    )
                 }
+
+                segmentBoundaries(
+                    ratios: boundaryRatios(for: innerSlices),
+                    lineWidth: innerLineWidth,
+                    frameSide: innerSide
+                )
+
+                outerPerimeterBorder(
+                    frameSide: showOuterTrack ? side : innerSide,
+                    ringLineWidth: showOuterTrack ? outerLineWidth : innerLineWidth
+                )
+
+                innerPerimeterBorder(
+                    frameSide: innerSide,
+                    ringLineWidth: innerLineWidth
+                )
             }
             .frame(width: side, height: side)
         }
+    }
+
+    private func ringSlice(slice: TimelineRingSlice, lineWidth: CGFloat, frameSide: CGFloat) -> some View {
+        Circle()
+            .trim(from: clampedRatio(slice.startRatio), to: clampedRatio(slice.endRatio))
+            .stroke(slice.color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+            .rotationEffect(.degrees(-90))
+            .frame(width: frameSide, height: frameSide)
+    }
+
+    private func segmentBoundaries(ratios: [Double], lineWidth: CGFloat, frameSide: CGFloat) -> some View {
+        ZStack {
+            ForEach(Array(ratios.enumerated()), id: \.offset) { _, ratio in
+                Path { path in
+                    let center = CGPoint(x: frameSide / 2, y: frameSide / 2)
+                    let angle = angleRadians(for: ratio)
+                    let innerRadius = max(0, (frameSide / 2) - (lineWidth / 2))
+                    let outerRadius = (frameSide / 2) + (lineWidth / 2)
+                    let start = point(center: center, radius: innerRadius, angle: angle)
+                    let end = point(center: center, radius: outerRadius, angle: angle)
+                    path.move(to: start)
+                    path.addLine(to: end)
+                }
+                .stroke(Color.white, style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round))
+            }
+        }
+        .frame(width: frameSide, height: frameSide)
+    }
+
+    private func outerPerimeterBorder(frameSide: CGFloat, ringLineWidth: CGFloat) -> some View {
+        Circle()
+            .stroke(
+                Color.white,
+                style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
+            )
+            .frame(width: frameSide + ringLineWidth, height: frameSide + ringLineWidth)
+    }
+
+    private func innerPerimeterBorder(frameSide: CGFloat, ringLineWidth: CGFloat) -> some View {
+        Circle()
+            .stroke(
+                Color.white,
+                style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
+            )
+            .frame(
+                width: max(0, frameSide - ringLineWidth),
+                height: max(0, frameSide - ringLineWidth)
+            )
+    }
+
+    private func boundaryRatios(for slices: [TimelineRingSlice]) -> [Double] {
+        guard slices.count > 1 else { return [] }
+        let sorted = slices.sorted { lhs, rhs in
+            if lhs.startRatio == rhs.startRatio {
+                return lhs.endRatio < rhs.endRatio
+            }
+            return lhs.startRatio < rhs.startRatio
+        }
+
+        var boundaries: [Double] = []
+        let epsilon = 0.0005
+        for index in 1..<sorted.count {
+            let previous = sorted[index - 1]
+            let current = sorted[index]
+            if abs(previous.endRatio - current.startRatio) <= epsilon {
+                boundaries.append(current.startRatio)
+            }
+        }
+        return boundaries
+    }
+
+    private func angleRadians(for ratio: Double) -> Double {
+        (2 * .pi * ratio) - (.pi / 2)
+    }
+
+    private func point(center: CGPoint, radius: CGFloat, angle: Double) -> CGPoint {
+        CGPoint(
+            x: center.x + (radius * CGFloat(Darwin.cos(angle))),
+            y: center.y + (radius * CGFloat(Darwin.sin(angle)))
+        )
     }
 
     private func clampedRatio(_ ratio: Double) -> CGFloat {
