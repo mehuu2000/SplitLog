@@ -23,31 +23,33 @@ struct SessionTimelineRingView: View {
     private let outerLineWidth: CGFloat = 30
     private let segmentBoundaryLineWidth: CGFloat = 1
     private let contactBorderOutwardOffset: CGFloat = 3
+    private let ringDiameterInset: CGFloat = 16
 
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
-            let innerSide = max(0, side - 56)
+            let ringSide = max(0, side - ringDiameterInset)
+            let innerSide = max(0, ringSide - 56)
             let trackColor = Color.primary.opacity(0.1)
 
             ZStack {
                 if showOuterTrack {
                     Circle()
                         .stroke(trackColor, lineWidth: outerLineWidth)
-                        .frame(width: side, height: side)
+                        .frame(width: ringSide, height: ringSide)
 
                     ForEach(outerSlices) { slice in
                         ringSlice(
                             slice: slice,
                             lineWidth: outerLineWidth,
-                            frameSide: side
+                            frameSide: ringSide
                         )
                     }
 
                     segmentBoundaries(
                         ratios: boundaryRatios(for: outerSlices),
                         lineWidth: outerLineWidth,
-                        frameSide: side
+                        frameSide: ringSide
                     )
                 }
 
@@ -70,12 +72,12 @@ struct SessionTimelineRingView: View {
                 )
 
                 outerPerimeterBorder(
-                    frameSide: showOuterTrack ? side : innerSide,
+                    frameSide: showOuterTrack ? ringSide : innerSide,
                     ringLineWidth: showOuterTrack ? outerLineWidth : innerLineWidth
                 )
 
                 innerPerimeterBorder(
-                    frameSide: showOuterTrack ? side : innerSide,
+                    frameSide: showOuterTrack ? ringSide : innerSide,
                     ringLineWidth: showOuterTrack ? outerLineWidth : innerLineWidth,
                     outwardOffset: showOuterTrack ? contactBorderOutwardOffset : 0
                 )
