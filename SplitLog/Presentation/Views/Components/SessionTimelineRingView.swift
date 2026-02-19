@@ -19,9 +19,10 @@ struct SessionTimelineRingView: View {
     let outerSlices: [TimelineRingSlice]
     let showOuterTrack: Bool
 
-    private let innerLineWidth: CGFloat = 34
-    private let outerLineWidth: CGFloat = 26
+    private let innerLineWidth: CGFloat = 30
+    private let outerLineWidth: CGFloat = 30
     private let segmentBoundaryLineWidth: CGFloat = 1
+    private let contactBorderOutwardOffset: CGFloat = 3
 
     var body: some View {
         GeometryReader { proxy in
@@ -74,8 +75,9 @@ struct SessionTimelineRingView: View {
                 )
 
                 innerPerimeterBorder(
-                    frameSide: innerSide,
-                    ringLineWidth: innerLineWidth
+                    frameSide: showOuterTrack ? side : innerSide,
+                    ringLineWidth: showOuterTrack ? outerLineWidth : innerLineWidth,
+                    outwardOffset: showOuterTrack ? contactBorderOutwardOffset : 0
                 )
             }
             .frame(width: side, height: side)
@@ -115,18 +117,25 @@ struct SessionTimelineRingView: View {
                 Color.white,
                 style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
             )
-            .frame(width: frameSide + ringLineWidth, height: frameSide + ringLineWidth)
+            .frame(
+                width: frameSide + ringLineWidth + segmentBoundaryLineWidth,
+                height: frameSide + ringLineWidth + segmentBoundaryLineWidth
+            )
     }
 
-    private func innerPerimeterBorder(frameSide: CGFloat, ringLineWidth: CGFloat) -> some View {
+    private func innerPerimeterBorder(
+        frameSide: CGFloat,
+        ringLineWidth: CGFloat,
+        outwardOffset: CGFloat
+    ) -> some View {
         Circle()
             .stroke(
                 Color.white,
                 style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round)
             )
             .frame(
-                width: max(0, frameSide - ringLineWidth),
-                height: max(0, frameSide - ringLineWidth)
+                width: max(0, frameSide - ringLineWidth - segmentBoundaryLineWidth + (outwardOffset * 2)),
+                height: max(0, frameSide - ringLineWidth - segmentBoundaryLineWidth + (outwardOffset * 2))
             )
     }
 
