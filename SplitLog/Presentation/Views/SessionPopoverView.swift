@@ -30,9 +30,23 @@ struct SessionPopoverView: View {
                     Label("SplitLog", systemImage: "timer")
                         .font(.headline)
                     Spacer()
-                    Text(stateText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 8) {
+                        sessionSelectorCapsule
+
+                        Button(action: handleAddSession) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                                .background(
+                                    Circle()
+                                        .fill(Color.primary.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("セッション追加")
+                        .accessibilityLabel("セッション追加")
+                    }
                 }
 
                 Divider()
@@ -169,7 +183,7 @@ struct SessionPopoverView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("リセットしますか？")
                         .font(.headline)
-                    Text("現在のセッションとラップを初期状態に戻します。")
+                    Text("すべてのセッションとラップを初期状態に戻します。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -209,8 +223,58 @@ struct SessionPopoverView: View {
         }
     }
 
-    private var stateText: String {
-        stopwatchStateText
+    @ViewBuilder
+    private var sessionSelectorCapsule: some View {
+        HStack(spacing: 4) {
+            if stopwatch.sessions.isEmpty {
+                Text("セッションなし")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(stopwatch.sessions) { listedSession in
+                            let isSelected = stopwatch.selectedSessionID == listedSession.id
+                            Button {
+                                handleSelectSession(sessionID: listedSession.id)
+                            } label: {
+                                Text(listedSession.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .frame(maxWidth: 100)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+                .frame(width: 220)
+            }
+
+            Button(action: {}) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .disabled(true)
+            .opacity(0.6)
+            .help("セッション一覧アクション（将来対応）")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .stroke(Color.primary.opacity(0.28), lineWidth: 1)
+        )
     }
 
     private var subtitleText: String {
@@ -262,6 +326,16 @@ struct SessionPopoverView: View {
     private func handleFinishLap() {
         commitActiveLapLabelEditIfNeeded()
         stopwatch.finishLap()
+    }
+
+    private func handleAddSession() {
+        commitActiveLapLabelEditIfNeeded()
+        stopwatch.addSession()
+    }
+
+    private func handleSelectSession(sessionID: UUID) {
+        commitActiveLapLabelEditIfNeeded()
+        stopwatch.selectSession(sessionID: sessionID)
     }
 
     private func handleSelectLap(lapID: UUID) {

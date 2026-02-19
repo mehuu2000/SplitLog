@@ -10,6 +10,9 @@ import Foundation
 
 @MainActor
 final class StopwatchService: ObservableObject {
+    @Published private(set) var sessions: [WorkSession] = []
+    @Published private(set) var selectedSessionID: UUID?
+
     @Published private(set) var state: SessionState = .idle
     @Published private(set) var session: WorkSession?
     @Published private(set) var laps: [WorkLap] = []
@@ -21,12 +24,33 @@ final class StopwatchService: ObservableObject {
     private let foregroundClockUpdateInterval: TimeInterval = 1.0 / 60.0
     private let backgroundClockUpdateInterval: TimeInterval = 1.0
     private var isDisplayActive: Bool = false
-    private var pauseStartedAt: Date?
-    private var lastLapActivationAt: Date?
-    private var completedPauseIntervals: [DateInterval] = []
 
-    init(autoTick: Bool = true) {
+    private var sessionContexts: [UUID: SessionContext] = [:]
+    private var sessionOrder: [UUID] = []
+    private var nextSessionNumber: Int = 1
+    private let persistenceURL: URL?
+
+    private struct SessionContext: Codable, Sendable {
+        var session: WorkSession
+        var laps: [WorkLap]
+        var selectedLapID: UUID?
+        var state: SessionState
+        var pauseStartedAt: Date?
+        var lastLapActivationAt: Date?
+        var completedPauseIntervals: [DateInterval]
+    }
+
+    private struct PersistedState: Codable {
+        var contexts: [SessionContext]
+        var selectedSessionID: UUID?
+        var nextSessionNumber: Int
+    }
+
+    init(autoTick: Bool = true, persistenceEnabled: Bool = true) {
         self.autoTick = autoTick
+        self.persistenceURL = persistenceEnabled ? Self.makePersistenceURL() : nil
+        restorePersistedState()
+        applySelectedContext()
     }
 
     var currentLap: WorkLap? {
@@ -38,164 +62,240 @@ final class StopwatchService: ObservableObject {
         laps.filter { $0.id != selectedLapID }
     }
 
+    func addSession(at date: Date = Date()) {
+        stopRunningSessions(except: nil, at: date)
+
+        let context = makeRunningSessionContext(at: date)
+        sessionContexts[context.session.id] = context
+        sessionOrder.append(context.session.id)
+        selectedSessionID = context.session.id
+        clock = date
+
+        applySelectedContext()
+        persistState()
+    }
+
+    func selectSession(sessionID: UUID, at date: Date = Date()) {
+        guard sessionContexts[sessionID] != nil else { return }
+        guard selectedSessionID != sessionID else { return }
+
+        // Session switch must freeze elapsed time of the previously running session.
+        stopRunningSessions(except: sessionID, at: date)
+
+        selectedSessionID = sessionID
+        clock = date
+        applySelectedContext()
+        persistState()
+    }
+
+    func sessionState(for sessionID: UUID) -> SessionState {
+        sessionContexts[sessionID]?.state ?? .idle
+    }
+
     func startSession(at date: Date = Date()) {
-        switch state {
+        guard let selectedSessionID, var context = sessionContexts[selectedSessionID] else {
+            addSession(at: date)
+            return
+        }
+
+        switch context.state {
         case .running:
             return
         case .paused, .stopped:
-            resumeSession(at: date)
-            return
+            stopRunningSessions(except: context.session.id, at: date)
+            resume(context: &context, at: date)
+            sessionContexts[selectedSessionID] = context
         case .idle, .finished:
-            break
+            // Fall back to creating a new active session when the selected entry is not resumable.
+            addSession(at: date)
+            return
         }
 
-        let sessionId = UUID()
-        let initialLap = WorkLap(
-            id: UUID(),
-            sessionId: sessionId,
-            index: 1,
-            startedAt: date,
-            endedAt: nil,
-            accumulatedDuration: 0,
-            label: defaultLapLabel(for: 1)
-        )
-
-        session = WorkSession(id: sessionId, startedAt: date, endedAt: nil)
-        laps = [initialLap]
-        selectedLapID = initialLap.id
-        state = .running
-        pauseStartedAt = nil
-        lastLapActivationAt = date
-        completedPauseIntervals = []
         clock = date
-
-        if autoTick {
-            startClock()
-        }
+        applySelectedContext()
+        persistState()
     }
 
     func finishLap(at date: Date = Date()) {
-        guard state == .running, let activeSession = session else { return }
-        guard let selectedLapID, let currentIndex = laps.firstIndex(where: { $0.id == selectedLapID }) else { return }
-
-        accumulateActiveDuration(until: date)
-        if laps[currentIndex].endedAt == nil {
-            laps[currentIndex].endedAt = date
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.state == .running
+        else {
+            return
+        }
+        guard let selectedLapID = context.selectedLapID, let currentIndex = context.laps.firstIndex(where: { $0.id == selectedLapID }) else {
+            return
         }
 
-        let nextIndex = (laps.map(\.index).max() ?? 0) + 1
+        accumulateActiveDuration(in: &context, until: date)
+        if context.laps[currentIndex].endedAt == nil {
+            context.laps[currentIndex].endedAt = date
+        }
+
+        let nextIndex = (context.laps.map(\.index).max() ?? 0) + 1
         let nextLap = WorkLap(
             id: UUID(),
-            sessionId: activeSession.id,
+            sessionId: context.session.id,
             index: nextIndex,
             startedAt: date,
             endedAt: nil,
             accumulatedDuration: 0,
             label: defaultLapLabel(for: nextIndex)
         )
-        laps.append(nextLap)
-        self.selectedLapID = nextLap.id
-        lastLapActivationAt = date
+        context.laps.append(nextLap)
+        context.selectedLapID = nextLap.id
+        context.lastLapActivationAt = date
+
+        sessionContexts[selectedSessionID] = context
         clock = date
+        applySelectedContext()
+        persistState()
     }
 
     func selectLap(lapID: UUID, at date: Date = Date()) {
-        guard laps.contains(where: { $0.id == lapID }) else { return }
-        guard selectedLapID != lapID else { return }
-
-        if state == .running {
-            accumulateActiveDuration(until: date)
-            selectedLapID = lapID
-            lastLapActivationAt = date
-            clock = date
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.laps.contains(where: { $0.id == lapID }),
+            context.selectedLapID != lapID
+        else {
             return
         }
 
-        if state == .paused || state == .stopped {
-            selectedLapID = lapID
-            clock = date
+        if context.state == .running {
+            accumulateActiveDuration(in: &context, until: date)
+            context.selectedLapID = lapID
+            context.lastLapActivationAt = date
+        } else if context.state == .paused || context.state == .stopped {
+            context.selectedLapID = lapID
+        } else {
+            return
         }
+
+        sessionContexts[selectedSessionID] = context
+        clock = date
+        applySelectedContext()
+        persistState()
     }
 
     func pauseSession(at date: Date = Date()) {
-        guard state == .running else { return }
-        accumulateActiveDuration(until: date)
-        state = .paused
-        pauseStartedAt = date
-        lastLapActivationAt = nil
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.state == .running
+        else {
+            return
+        }
+
+        accumulateActiveDuration(in: &context, until: date)
+        context.state = .paused
+        context.pauseStartedAt = date
+        context.lastLapActivationAt = nil
+
+        sessionContexts[selectedSessionID] = context
         clock = date
-        stopClock()
+        applySelectedContext()
+        persistState()
     }
 
     func resumeSession(at date: Date = Date()) {
-        guard (state == .paused || state == .stopped), let pausedAt = pauseStartedAt else { return }
-        let resumedAt = max(date, pausedAt)
-        completedPauseIntervals.append(DateInterval(start: pausedAt, end: resumedAt))
-
-        pauseStartedAt = nil
-        state = .running
-        lastLapActivationAt = resumedAt
-        clock = resumedAt
-
-        if autoTick {
-            startClock()
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.state == .paused || context.state == .stopped
+        else {
+            return
         }
+
+        stopRunningSessions(except: context.session.id, at: date)
+        resume(context: &context, at: date)
+
+        sessionContexts[selectedSessionID] = context
+        clock = date
+        applySelectedContext()
+        persistState()
     }
 
     func finishSession(at date: Date = Date()) {
-        guard (state == .running || state == .paused), session != nil else { return }
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.state == .running || context.state == .paused
+        else {
+            return
+        }
 
         let stoppedAt: Date
-        if state == .paused, let pausedAt = pauseStartedAt {
+        if context.state == .paused, let pausedAt = context.pauseStartedAt {
             stoppedAt = pausedAt
         } else {
             stoppedAt = date
-            accumulateActiveDuration(until: stoppedAt)
-            pauseStartedAt = stoppedAt
+            accumulateActiveDuration(in: &context, until: stoppedAt)
+            context.pauseStartedAt = stoppedAt
         }
 
-        state = .stopped
-        lastLapActivationAt = nil
+        context.state = .stopped
+        context.lastLapActivationAt = nil
+
+        sessionContexts[selectedSessionID] = context
         clock = stoppedAt
-        stopClock()
+        applySelectedContext()
+        persistState()
     }
 
     func resetToIdle() {
+        sessionContexts = [:]
+        sessionOrder = []
+        sessions = []
+        selectedSessionID = nil
+        nextSessionNumber = 1
+
         state = .idle
         session = nil
         laps = []
         selectedLapID = nil
-        pauseStartedAt = nil
-        lastLapActivationAt = nil
-        completedPauseIntervals = []
         clock = Date()
         stopClock()
+
+        removePersistedState()
     }
 
     func updateLapLabel(lapID: UUID, label: String) {
-        guard let index = laps.firstIndex(where: { $0.id == lapID }) else { return }
-        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmed.isEmpty {
-            laps[index].label = defaultLapLabel(for: laps[index].index)
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            let index = context.laps.firstIndex(where: { $0.id == lapID })
+        else {
             return
         }
 
-        laps[index].label = trimmed
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            context.laps[index].label = defaultLapLabel(for: context.laps[index].index)
+        } else {
+            context.laps[index].label = trimmed
+        }
+
+        sessionContexts[selectedSessionID] = context
+        applySelectedContext()
+        persistState()
     }
 
     func setDisplayActive(_ isActive: Bool) {
         guard isDisplayActive != isActive else { return }
         isDisplayActive = isActive
-
-        guard autoTick, state == .running else { return }
-        startClock()
+        syncTimerForSelectedState()
     }
 
     func elapsedSession(at referenceDate: Date? = nil) -> TimeInterval {
-        guard let session else { return 0 }
-        let endDate = resolvedEndDate(endedAt: session.endedAt, referenceDate: referenceDate)
-        return activeElapsed(from: session.startedAt, to: endDate)
+        guard let context = currentContext else { return 0 }
+        return elapsedSession(in: context, at: referenceDate ?? clock)
+    }
+
+    func elapsedSession(for sessionID: UUID, at referenceDate: Date? = nil) -> TimeInterval {
+        guard let context = sessionContexts[sessionID] else { return 0 }
+        return elapsedSession(in: context, at: referenceDate ?? clock)
     }
 
     func elapsedCurrentLap(at referenceDate: Date? = nil) -> TimeInterval {
@@ -204,34 +304,129 @@ final class StopwatchService: ObservableObject {
     }
 
     func elapsedLap(_ lap: WorkLap, at referenceDate: Date? = nil) -> TimeInterval {
-        var elapsed = max(0, lap.accumulatedDuration)
-        guard state == .running, selectedLapID == lap.id, let lastLapActivationAt else {
-            return elapsed
-        }
-
-        let reference = referenceDate ?? clock
-        elapsed += max(0, reference.timeIntervalSince(lastLapActivationAt))
-        return max(0, elapsed)
+        guard let context = currentContext else { return max(0, lap.accumulatedDuration) }
+        return elapsedLap(lap, in: context, at: referenceDate ?? clock)
     }
 
     func activeTimelineOffset(at date: Date) -> TimeInterval {
-        guard let session else { return 0 }
-        let clampedDate = pausedClampedReferenceDate(date)
-        return activeElapsed(from: session.startedAt, to: clampedDate)
+        guard let context = currentContext else { return 0 }
+        let clampedDate = pausedClampedReferenceDate(for: context, date)
+        return activeElapsed(in: context, from: context.session.startedAt, to: clampedDate)
+    }
+
+    private var currentContext: SessionContext? {
+        guard let selectedSessionID else { return nil }
+        return sessionContexts[selectedSessionID]
+    }
+
+    private func applySelectedContext() {
+        refreshSessionList()
+
+        guard let selectedSessionID, let context = sessionContexts[selectedSessionID] else {
+            state = .idle
+            session = nil
+            laps = []
+            selectedLapID = nil
+            syncTimerForSelectedState()
+            return
+        }
+
+        state = context.state
+        session = context.session
+        laps = context.laps
+        selectedLapID = context.selectedLapID
+        syncTimerForSelectedState()
+    }
+
+    private func refreshSessionList() {
+        sessions = sessionOrder.compactMap { sessionContexts[$0]?.session }
+    }
+
+    private func makeRunningSessionContext(at date: Date) -> SessionContext {
+        let sessionID = UUID()
+        let sessionTitle = defaultSessionTitle(for: nextSessionNumber)
+        nextSessionNumber += 1
+
+        let initialLap = WorkLap(
+            id: UUID(),
+            sessionId: sessionID,
+            index: 1,
+            startedAt: date,
+            endedAt: nil,
+            accumulatedDuration: 0,
+            label: defaultLapLabel(for: 1)
+        )
+
+        let session = WorkSession(
+            id: sessionID,
+            title: sessionTitle,
+            startedAt: date,
+            endedAt: nil
+        )
+
+        return SessionContext(
+            session: session,
+            laps: [initialLap],
+            selectedLapID: initialLap.id,
+            state: .running,
+            pauseStartedAt: nil,
+            lastLapActivationAt: date,
+            completedPauseIntervals: []
+        )
+    }
+
+    private func stopRunningSessions(except keepSessionID: UUID?, at date: Date) {
+        for id in sessionOrder {
+            guard id != keepSessionID, var context = sessionContexts[id], context.state == .running else { continue }
+            accumulateActiveDuration(in: &context, until: date)
+            context.state = .stopped
+            context.pauseStartedAt = date
+            context.lastLapActivationAt = nil
+            sessionContexts[id] = context
+        }
+    }
+
+    private func resume(context: inout SessionContext, at date: Date) {
+        guard context.state == .paused || context.state == .stopped else { return }
+        let pausedAt = context.pauseStartedAt ?? date
+        let resumedAt = max(date, pausedAt)
+        context.completedPauseIntervals.append(DateInterval(start: pausedAt, end: resumedAt))
+        context.pauseStartedAt = nil
+        context.state = .running
+        context.lastLapActivationAt = resumedAt
     }
 
     private func defaultLapLabel(for index: Int) -> String {
         "作業\(index)"
     }
 
-    private func accumulateActiveDuration(until date: Date) {
-        guard state == .running else { return }
-        guard let selectedLapID, let lastLapActivationAt else { return }
-        guard let lapIndex = laps.firstIndex(where: { $0.id == selectedLapID }) else { return }
+    private func defaultSessionTitle(for number: Int) -> String {
+        "セッション\(number)"
+    }
+
+    private func accumulateActiveDuration(in context: inout SessionContext, until date: Date) {
+        guard context.state == .running else { return }
+        guard let selectedLapID = context.selectedLapID, let lastLapActivationAt = context.lastLapActivationAt else { return }
+        guard let lapIndex = context.laps.firstIndex(where: { $0.id == selectedLapID }) else { return }
         guard date > lastLapActivationAt else { return }
 
-        laps[lapIndex].accumulatedDuration += date.timeIntervalSince(lastLapActivationAt)
-        self.lastLapActivationAt = date
+        context.laps[lapIndex].accumulatedDuration += date.timeIntervalSince(lastLapActivationAt)
+        context.lastLapActivationAt = date
+    }
+
+    private func elapsedSession(in context: SessionContext, at referenceDate: Date) -> TimeInterval {
+        let endDate = resolvedEndDate(for: context, referenceDate: referenceDate)
+        return activeElapsed(in: context, from: context.session.startedAt, to: endDate)
+    }
+
+    private func elapsedLap(_ lap: WorkLap, in context: SessionContext, at referenceDate: Date) -> TimeInterval {
+        var elapsed = max(0, lap.accumulatedDuration)
+        guard context.state == .running, context.selectedLapID == lap.id, let lastLapActivationAt = context.lastLapActivationAt else {
+            return elapsed
+        }
+
+        elapsed += max(0, referenceDate.timeIntervalSince(lastLapActivationAt))
+        return max(0, elapsed)
     }
 
     private func startClock() {
@@ -250,24 +445,36 @@ final class StopwatchService: ObservableObject {
         timerCancellable = nil
     }
 
-    private func resolvedEndDate(endedAt: Date?, referenceDate: Date?) -> Date {
-        if let endedAt {
+    private func syncTimerForSelectedState() {
+        guard autoTick else { return }
+
+        if state == .running {
+            startClock()
+        } else {
+            stopClock()
+        }
+    }
+
+    private func resolvedEndDate(for context: SessionContext, referenceDate: Date) -> Date {
+        if let endedAt = context.session.endedAt {
             return endedAt
         }
 
-        return pausedClampedReferenceDate(referenceDate ?? clock)
+        return pausedClampedReferenceDate(for: context, referenceDate)
     }
 
-    private func pausedClampedReferenceDate(_ date: Date) -> Date {
-        guard (state == .paused || state == .stopped), let pauseStartedAt else { return date }
+    private func pausedClampedReferenceDate(for context: SessionContext, _ date: Date) -> Date {
+        guard (context.state == .paused || context.state == .stopped), let pauseStartedAt = context.pauseStartedAt else {
+            return date
+        }
         return min(date, pauseStartedAt)
     }
 
-    private func activeElapsed(from start: Date, to end: Date) -> TimeInterval {
+    private func activeElapsed(in context: SessionContext, from start: Date, to end: Date) -> TimeInterval {
         guard end > start else { return 0 }
 
         let rawDuration = end.timeIntervalSince(start)
-        let pausedDuration = completedPauseIntervals.reduce(0) { partial, interval in
+        let pausedDuration = context.completedPauseIntervals.reduce(0) { partial, interval in
             partial + overlapDuration(start: start, end: end, interval: interval)
         }
 
@@ -278,5 +485,70 @@ final class StopwatchService: ObservableObject {
         let overlapStart = max(start, interval.start)
         let overlapEnd = min(end, interval.end)
         return max(0, overlapEnd.timeIntervalSince(overlapStart))
+    }
+
+    private func restorePersistedState() {
+        guard let persistenceURL else { return }
+        guard let data = try? Data(contentsOf: persistenceURL) else { return }
+        guard let restored = try? JSONDecoder().decode(PersistedState.self, from: data) else { return }
+
+        var restoredContexts: [UUID: SessionContext] = [:]
+        var restoredOrder: [UUID] = []
+
+        for context in restored.contexts {
+            let id = context.session.id
+            guard restoredContexts[id] == nil else { continue }
+            restoredContexts[id] = context
+            restoredOrder.append(id)
+        }
+
+        sessionContexts = restoredContexts
+        sessionOrder = restoredOrder
+        nextSessionNumber = max(1, restored.nextSessionNumber)
+
+        if let selected = restored.selectedSessionID, sessionContexts[selected] != nil {
+            selectedSessionID = selected
+        } else {
+            selectedSessionID = sessionOrder.first
+        }
+    }
+
+    private func persistState() {
+        guard let persistenceURL else { return }
+
+        let payload = PersistedState(
+            contexts: sessionOrder.compactMap { sessionContexts[$0] },
+            selectedSessionID: selectedSessionID,
+            nextSessionNumber: nextSessionNumber
+        )
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(payload)
+            try data.write(to: persistenceURL, options: .atomic)
+        } catch {
+            // Keep runtime behavior unchanged even if persistence fails.
+        }
+    }
+
+    private func removePersistedState() {
+        guard let persistenceURL else { return }
+        try? FileManager.default.removeItem(at: persistenceURL)
+    }
+
+    private static func makePersistenceURL() -> URL? {
+        guard let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+
+        let directory = appSupportURL.appendingPathComponent("SplitLog", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        } catch {
+            return nil
+        }
+
+        return directory.appendingPathComponent("sessions.json")
     }
 }
