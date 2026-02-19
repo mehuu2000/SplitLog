@@ -46,8 +46,12 @@ struct SessionPopoverView: View {
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
-    init(stopwatch: StopwatchService = StopwatchService()) {
+    init(stopwatch: StopwatchService) {
         _stopwatch = StateObject(wrappedValue: stopwatch)
+    }
+
+    init() {
+        _stopwatch = StateObject(wrappedValue: StopwatchService())
     }
 
     var body: some View {

@@ -29,6 +29,7 @@ final class StopwatchService: ObservableObject {
     private var sessionOrder: [UUID] = []
     private var nextSessionNumber: Int = 1
     private let sessionStore: SessionStore?
+    private let restoreReferenceDate: Date?
 
     private struct SessionContext: Codable, Sendable {
         var session: WorkSession
@@ -43,9 +44,11 @@ final class StopwatchService: ObservableObject {
     init(
         autoTick: Bool = true,
         persistenceEnabled: Bool = true,
-        sessionStore: SessionStore? = nil
+        sessionStore: SessionStore? = nil,
+        restoreReferenceDate: Date? = nil
     ) {
         self.autoTick = autoTick
+        self.restoreReferenceDate = restoreReferenceDate
         if let sessionStore {
             self.sessionStore = sessionStore
         } else if persistenceEnabled {
@@ -574,7 +577,10 @@ final class StopwatchService: ObservableObject {
     private func restorePersistedState() {
         guard let sessionStore else { return }
         guard let restoredSnapshot = try? sessionStore.loadSnapshot() else { return }
-        let restored = normalizedSnapshotForRestore(restoredSnapshot)
+        let restored = normalizedSnapshotForRestore(
+            restoredSnapshot,
+            restoreDate: restoreReferenceDate ?? Date()
+        )
         var restoredContexts: [UUID: SessionContext] = [:]
         var restoredOrder: [UUID] = []
 
@@ -652,7 +658,10 @@ final class StopwatchService: ObservableObject {
         )
     }
 
-    private func normalizedSnapshotForRestore(_ snapshot: StopwatchStorageSnapshot) -> StopwatchStorageSnapshot {
+    private func normalizedSnapshotForRestore(
+        _ snapshot: StopwatchStorageSnapshot,
+        restoreDate: Date
+    ) -> StopwatchStorageSnapshot {
         var normalizedContexts: [PersistedSessionContext] = []
         normalizedContexts.reserveCapacity(snapshot.contexts.count)
 
@@ -663,17 +672,20 @@ final class StopwatchService: ObservableObject {
                 continue
             }
 
+            // If the app terminated without a normal stop event, treat launch time as stop time (MVP rule).
+            let resolvedStopDate = max(snapshot.savedAt, restoreDate)
+
             if
                 let selectedLapID = context.selectedLapID,
                 let lastLapActivationAt = context.lastLapActivationAt,
-                snapshot.savedAt > lastLapActivationAt,
+                resolvedStopDate > lastLapActivationAt,
                 let lapIndex = context.laps.firstIndex(where: { $0.id == selectedLapID })
             {
-                context.laps[lapIndex].accumulatedDuration += snapshot.savedAt.timeIntervalSince(lastLapActivationAt)
+                context.laps[lapIndex].accumulatedDuration += resolvedStopDate.timeIntervalSince(lastLapActivationAt)
             }
 
             context.state = .stopped
-            context.pauseStartedAt = snapshot.savedAt
+            context.pauseStartedAt = resolvedStopDate
             context.lastLapActivationAt = nil
             normalizedContexts.append(context)
         }

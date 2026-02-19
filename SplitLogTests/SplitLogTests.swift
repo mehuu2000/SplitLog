@@ -437,23 +437,28 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func restore_runningSnapshot_isNormalizedToStoppedWithoutOfflineDrift() {
+    @Test func restore_runningSnapshot_isNormalizedToStoppedAtRelaunchTime() {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let t1 = Date(timeIntervalSince1970: 1_010)
+        let relaunchAt = Date(timeIntervalSince1970: 1_050)
         let checkAt = Date(timeIntervalSince1970: 1_200)
 
         let source = StopwatchService(autoTick: false, sessionStore: store)
         source.startSession(at: t0)
         source.finishLap(at: t1) // persists while still running
 
-        let restored = StopwatchService(autoTick: false, sessionStore: store)
+        let restored = StopwatchService(
+            autoTick: false,
+            sessionStore: store,
+            restoreReferenceDate: relaunchAt
+        )
 
         #expect(restored.state == .stopped)
         #expect(restored.laps.count == 2)
         #expect(restored.currentLap?.index == 2)
-        #expect(restored.elapsedSession(at: checkAt) == 10)
-        #expect(restored.elapsedCurrentLap(at: checkAt) == 0)
+        #expect(restored.elapsedSession(at: checkAt) == 50)
+        #expect(restored.elapsedCurrentLap(at: checkAt) == 40)
     }
 
     @MainActor
