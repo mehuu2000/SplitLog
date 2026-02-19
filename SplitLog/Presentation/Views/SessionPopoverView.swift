@@ -5,11 +5,14 @@
 //  Created by 濱田真仁 on 2026/02/17.
 //
 
+import AppKit
 import SwiftUI
 
 @MainActor
 struct SessionPopoverView: View {
     @StateObject private var stopwatch = StopwatchService()
+    @State private var editingLapID: UUID?
+    @State private var editingLapLabelDraft = ""
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -54,9 +57,30 @@ struct SessionPopoverView: View {
                                         let color = lapColor(for: lap.index)
                                         VStack(alignment: .leading, spacing: 2) {
                                             HStack {
-                                                Text("\(lap.label)：")
-                                                    .fontWeight(.medium)
-                                                    .foregroundStyle(Color.black)
+                                                if editingLapID == lap.id {
+                                                    InlineLapLabelEditor(
+                                                        text: $editingLapLabelDraft,
+                                                        onCommit: {
+                                                            commitLapLabelEdit(lapID: lap.id)
+                                                        }
+                                                    )
+                                                    .frame(minWidth: 96, maxWidth: 220, alignment: .leading)
+                                                    .padding(.horizontal, 6)
+                                                    .padding(.vertical, 2)
+                                                    .background(
+                                                        RoundedRectangle(cornerRadius: 4)
+                                                            .fill(Color.white.opacity(0.9))
+                                                    )
+                                                } else {
+                                                    Text("\(lap.label)：")
+                                                        .fontWeight(.medium)
+                                                        .foregroundStyle(Color.black)
+                                                        .contentShape(Rectangle())
+                                                        .onTapGesture {
+                                                            beginLapLabelEdit(for: lap)
+                                                        }
+                                                }
+
                                                 Spacer()
                                                 Text(formatDuration(seconds: lapDisplayedSeconds[lap.id] ?? 0))
                                                     .monospacedDigit()
@@ -118,6 +142,7 @@ struct SessionPopoverView: View {
             stopwatch.setDisplayActive(true)
         }
         .onDisappear {
+            commitActiveLapLabelEditIfNeeded()
             stopwatch.setDisplayActive(false)
         }
     }
@@ -153,14 +178,18 @@ struct SessionPopoverView: View {
     }
 
     private func handleStart() {
+        commitActiveLapLabelEditIfNeeded()
         stopwatch.startSession()
     }
 
     private func handleFinishLap() {
+        commitActiveLapLabelEditIfNeeded()
         stopwatch.finishLap()
     }
 
     private func handlePauseResume() {
+        commitActiveLapLabelEditIfNeeded()
+
         if stopwatch.state == .running {
             stopwatch.pauseSession()
             return
@@ -172,7 +201,31 @@ struct SessionPopoverView: View {
     }
 
     private func handleFinishSession() {
+        commitActiveLapLabelEditIfNeeded()
         stopwatch.finishSession()
+    }
+
+    private func beginLapLabelEdit(for lap: WorkLap) {
+        if let activeLapID = editingLapID, activeLapID != lap.id {
+            commitLapLabelEdit(lapID: activeLapID)
+        }
+
+        editingLapID = lap.id
+        editingLapLabelDraft = lap.label
+    }
+
+    private func commitLapLabelEdit(lapID: UUID) {
+        stopwatch.updateLapLabel(lapID: lapID, label: editingLapLabelDraft)
+
+        if editingLapID == lapID {
+            editingLapID = nil
+        }
+        editingLapLabelDraft = ""
+    }
+
+    private func commitActiveLapLabelEditIfNeeded() {
+        guard let lapID = editingLapID else { return }
+        commitLapLabelEdit(lapID: lapID)
     }
 
     private func timelineSlices(referenceDate: Date) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {
@@ -318,5 +371,103 @@ struct SessionPopoverView: View {
 struct SessionPopoverView_Previews: PreviewProvider {
     static var previews: some View {
         SessionPopoverView()
+    }
+}
+
+private struct InlineLapLabelEditor: NSViewRepresentable {
+    @Binding var text: String
+    let onCommit: () -> Void
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: InlineLapLabelEditor
+        weak var textField: NSTextField?
+        private var outsideClickMonitor: Any?
+        var didRequestInitialFocus = false
+
+        init(parent: InlineLapLabelEditor) {
+            self.parent = parent
+        }
+
+        deinit {
+            removeOutsideClickMonitor()
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+            removeOutsideClickMonitor()
+            parent.onCommit()
+        }
+
+        func installOutsideClickMonitor() {
+            guard outsideClickMonitor == nil else { return }
+
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+                guard let self, let field = self.textField, let window = field.window else { return event }
+                guard event.window === window else { return event }
+
+                let pointInField = field.convert(event.locationInWindow, from: nil)
+                if field.bounds.contains(pointInField) {
+                    return event
+                }
+
+                if let editor = field.currentEditor() {
+                    let pointInEditor = editor.convert(event.locationInWindow, from: nil)
+                    if editor.bounds.contains(pointInEditor) {
+                        return event
+                    }
+                }
+
+                window.makeFirstResponder(nil)
+                return event
+            }
+        }
+
+        func removeOutsideClickMonitor() {
+            guard let outsideClickMonitor else { return }
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.delegate = context.coordinator
+        field.isBordered = false
+        field.drawsBackground = false
+        field.backgroundColor = .clear
+        field.focusRingType = .none
+        field.maximumNumberOfLines = 1
+        field.usesSingleLineMode = true
+        field.lineBreakMode = .byTruncatingTail
+        field.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        field.textColor = .black
+        context.coordinator.textField = field
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.installOutsideClickMonitor()
+
+        if nsView.currentEditor() == nil, nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+
+        guard !context.coordinator.didRequestInitialFocus else { return }
+        context.coordinator.didRequestInitialFocus = true
+        DispatchQueue.main.async {
+            guard nsView.window != nil else { return }
+            nsView.window?.makeFirstResponder(nsView)
+        }
     }
 }
