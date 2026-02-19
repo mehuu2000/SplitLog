@@ -65,7 +65,7 @@ final class StopwatchService: ObservableObject {
     func addSession(at date: Date = Date()) {
         stopRunningSessions(except: nil, at: date)
 
-        let context = makeRunningSessionContext(at: date)
+        let context = makeIdleSessionContext(at: date)
         sessionContexts[context.session.id] = context
         sessionOrder.append(context.session.id)
         selectedSessionID = context.session.id
@@ -94,7 +94,13 @@ final class StopwatchService: ObservableObject {
 
     func startSession(at date: Date = Date()) {
         guard let selectedSessionID, var context = sessionContexts[selectedSessionID] else {
-            addSession(at: date)
+            let newContext = makeRunningSessionContext(at: date)
+            sessionContexts[newContext.session.id] = newContext
+            sessionOrder.append(newContext.session.id)
+            selectedSessionID = newContext.session.id
+            clock = date
+            applySelectedContext()
+            persistState()
             return
         }
 
@@ -102,13 +108,19 @@ final class StopwatchService: ObservableObject {
         case .running:
             return
         case .paused, .stopped:
+            if context.laps.isEmpty {
+                stopRunningSessions(except: context.session.id, at: date)
+                activateIdleSession(&context, at: date)
+                sessionContexts[selectedSessionID] = context
+                break
+            }
             stopRunningSessions(except: context.session.id, at: date)
             resume(context: &context, at: date)
             sessionContexts[selectedSessionID] = context
         case .idle, .finished:
-            // Fall back to creating a new active session when the selected entry is not resumable.
-            addSession(at: date)
-            return
+            stopRunningSessions(except: context.session.id, at: date)
+            activateIdleSession(&context, at: date)
+            sessionContexts[selectedSessionID] = context
         }
 
         clock = date
@@ -343,19 +355,15 @@ final class StopwatchService: ObservableObject {
     }
 
     private func makeRunningSessionContext(at date: Date) -> SessionContext {
+        var context = makeIdleSessionContext(at: date)
+        activateIdleSession(&context, at: date)
+        return context
+    }
+
+    private func makeIdleSessionContext(at date: Date) -> SessionContext {
         let sessionID = UUID()
         let sessionTitle = defaultSessionTitle(for: nextSessionNumber)
         nextSessionNumber += 1
-
-        let initialLap = WorkLap(
-            id: UUID(),
-            sessionId: sessionID,
-            index: 1,
-            startedAt: date,
-            endedAt: nil,
-            accumulatedDuration: 0,
-            label: defaultLapLabel(for: 1)
-        )
 
         let session = WorkSession(
             id: sessionID,
@@ -366,13 +374,34 @@ final class StopwatchService: ObservableObject {
 
         return SessionContext(
             session: session,
-            laps: [initialLap],
-            selectedLapID: initialLap.id,
-            state: .running,
+            laps: [],
+            selectedLapID: nil,
+            state: .idle,
             pauseStartedAt: nil,
-            lastLapActivationAt: date,
+            lastLapActivationAt: nil,
             completedPauseIntervals: []
         )
+    }
+
+    private func activateIdleSession(_ context: inout SessionContext, at date: Date) {
+        let initialLap = WorkLap(
+            id: UUID(),
+            sessionId: context.session.id,
+            index: 1,
+            startedAt: date,
+            endedAt: nil,
+            accumulatedDuration: 0,
+            label: defaultLapLabel(for: 1)
+        )
+
+        context.session.startedAt = date
+        context.session.endedAt = nil
+        context.laps = [initialLap]
+        context.selectedLapID = initialLap.id
+        context.state = .running
+        context.pauseStartedAt = nil
+        context.lastLapActivationAt = date
+        context.completedPauseIntervals = []
     }
 
     private func stopRunningSessions(except keepSessionID: UUID?, at date: Date) {
@@ -415,6 +444,10 @@ final class StopwatchService: ObservableObject {
     }
 
     private func elapsedSession(in context: SessionContext, at referenceDate: Date) -> TimeInterval {
+        if context.laps.isEmpty {
+            return 0
+        }
+
         let endDate = resolvedEndDate(for: context, referenceDate: referenceDate)
         return activeElapsed(in: context, from: context.session.startedAt, to: endDate)
     }

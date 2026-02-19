@@ -18,7 +18,7 @@ enum SessionState: String, Codable, Sendable {
 struct WorkSession: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     var title: String
-    let startedAt: Date
+    var startedAt: Date
     var endedAt: Date?
 }
 

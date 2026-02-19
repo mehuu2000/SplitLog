@@ -101,7 +101,7 @@ struct SplitLogTests {
         #expect(firstID != nil)
         #expect(secondID != nil)
         #expect(firstID != secondID)
-        #expect(service.state == .running)
+        #expect(service.state == .idle)
 
         if let firstID {
             service.selectSession(sessionID: firstID, at: t2)
@@ -110,8 +110,8 @@ struct SplitLogTests {
         }
 
         if let secondID {
-            #expect(service.sessionState(for: secondID) == .stopped)
-            #expect(service.elapsedSession(for: secondID, at: t3) == 10)
+            #expect(service.sessionState(for: secondID) == .idle)
+            #expect(service.elapsedSession(for: secondID, at: t3) == 0)
         }
     }
 
@@ -132,7 +132,7 @@ struct SplitLogTests {
         }
 
         service.finishSession(at: t1)   // first stopped
-        service.addSession(at: t2)      // second running
+        service.addSession(at: t2)      // second idle (not started yet)
         guard let secondID = service.session?.id else {
             Issue.record("second session should exist")
             return
@@ -144,10 +144,10 @@ struct SplitLogTests {
         service.startSession(at: t4)    // first resume, second should stop
         #expect(service.state == .running)
         #expect(service.session?.id == firstID)
-        #expect(service.sessionState(for: secondID) == .stopped)
+        #expect(service.sessionState(for: secondID) == .idle)
 
         service.selectSession(sessionID: secondID, at: t5)
-        #expect(service.elapsedSession(at: t5) == 10)
+        #expect(service.elapsedSession(at: t5) == 0)
     }
 
     @MainActor
@@ -165,7 +165,7 @@ struct SplitLogTests {
             return
         }
 
-        service.addSession(at: t1)              // session2 running, session1 stopped
+        service.addSession(at: t1)              // session2 idle, session1 stopped
         guard let session2ID = service.session?.id else {
             Issue.record("session2 should exist")
             return
@@ -177,7 +177,7 @@ struct SplitLogTests {
 
         #expect(service.sessionState(for: session1ID) == .stopped)
         #expect(service.elapsedSession(for: session1ID, at: t4) == 20)
-        #expect(service.state == .stopped)
+        #expect(service.state == .idle)
     }
 
     @MainActor
