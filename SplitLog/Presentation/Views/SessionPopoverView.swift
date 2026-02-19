@@ -185,6 +185,25 @@ struct SessionPopoverView: View {
                 }
             }
 
+            if isShowingSessionOverflowList {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        isShowingSessionOverflowList = false
+                    }
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        sessionOverflowFloatingPanel
+                    }
+                    Spacer()
+                }
+                .padding(.top, 46)
+                .padding(.trailing, 26)
+            }
+
             if isShowingResetConfirmation || isShowingDeleteSessionConfirmation {
                 Color.clear
                     .contentShape(Rectangle())
@@ -247,85 +266,9 @@ struct SessionPopoverView: View {
     @ViewBuilder
     private var sessionSelectorCapsule: some View {
         HStack(spacing: 4) {
-            if stopwatch.sessions.isEmpty {
-                Text("セッションなし")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(stopwatch.sessions) { listedSession in
-                            let isSelected = stopwatch.selectedSessionID == listedSession.id
-                            Button {
-                                handleSelectSession(sessionID: listedSession.id)
-                            } label: {
-                                Text(listedSession.title)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .frame(width: 64)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        Capsule()
-                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .frame(width: 64)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-                .frame(width: 220)
-            }
-
-            Button {
-                isShowingSessionOverflowList = true
-            } label: {
-                VStack(spacing: 2) {
-                    Circle().frame(width: 3, height: 3)
-                    Circle().frame(width: 3, height: 3)
-                    Circle().frame(width: 3, height: 3)
-                }
-                .foregroundStyle(Color.primary)
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .disabled(stopwatch.sessions.isEmpty)
-            .opacity(stopwatch.sessions.isEmpty ? 0.6 : 1)
-            .help("セッション一覧")
-            .popover(isPresented: $isShowingSessionOverflowList) {
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(stopwatch.sessions) { listedSession in
-                            let isSelected = stopwatch.selectedSessionID == listedSession.id
-                            Button {
-                                isShowingSessionOverflowList = false
-                                handleSelectSession(sessionID: listedSession.id)
-                            } label: {
-                                Text(listedSession.title)
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        Capsule()
-                                            .fill(isSelected ? Color.primary.opacity(0.14) : Color.primary.opacity(0.07))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(10)
-                .frame(width: 180, height: 260, alignment: .top)
-            }
+            sessionInlineArea
+            sessionOverflowButton
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
         .background(
             Capsule()
                 .stroke(Color.primary.opacity(0.28), lineWidth: 1)
@@ -335,6 +278,110 @@ struct SessionPopoverView: View {
                 isShowingSessionOverflowList = false
             }
         }
+    }
+
+    @ViewBuilder
+    private var sessionInlineArea: some View {
+        if stopwatch.sessions.isEmpty {
+            Text("セッションなし")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(stopwatch.sessions) { listedSession in
+                        sessionInlineChip(for: listedSession)
+                    }
+                }
+            }
+            .frame(width: 220)
+            .clipped()
+        }
+    }
+
+    private func sessionInlineChip(for listedSession: WorkSession) -> some View {
+        let isSelected = stopwatch.selectedSessionID == listedSession.id
+        return Button {
+            handleSelectSession(sessionID: listedSession.id)
+        } label: {
+            Text(listedSession.title)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: 64, height: 22)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .frame(width: 64)
+    }
+
+    private var sessionOverflowButton: some View {
+        Button {
+            isShowingSessionOverflowList.toggle()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(Color.primary.opacity(0.10))
+                VStack(spacing: 2) {
+                    Circle().frame(width: 3, height: 3)
+                    Circle().frame(width: 3, height: 3)
+                    Circle().frame(width: 3, height: 3)
+                }
+                .foregroundStyle(Color.primary)
+            }
+            .frame(width: 22, height: 22)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: 22, height: 22)
+        .contentShape(Rectangle())
+        .zIndex(1)
+        .disabled(stopwatch.sessions.isEmpty)
+        .opacity(stopwatch.sessions.isEmpty ? 0.6 : 1)
+        .help("セッション一覧")
+    }
+
+    private var sessionOverflowFloatingPanel: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(stopwatch.sessions) { listedSession in
+                    sessionOverflowRow(for: listedSession)
+                }
+            }
+        }
+        .padding(10)
+        .frame(width: 180, height: 260, alignment: .top)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    private func sessionOverflowRow(for listedSession: WorkSession) -> some View {
+        let isSelected = stopwatch.selectedSessionID == listedSession.id
+        return Button {
+            isShowingSessionOverflowList = false
+            handleSelectSession(sessionID: listedSession.id)
+        } label: {
+            Text(listedSession.title)
+                .font(.subheadline)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.primary.opacity(0.07))
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private var subtitleText: String {
