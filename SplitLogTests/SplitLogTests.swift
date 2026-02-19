@@ -308,6 +308,67 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func resetSelectedSession_resetsOnlyCurrentSession() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+
+        service.startSession(at: t0)
+        guard let session1ID = service.session?.id else {
+            Issue.record("session1 should exist")
+            return
+        }
+
+        service.finishSession(at: t1)
+        service.addSession(at: t2)
+        guard let session2ID = service.session?.id else {
+            Issue.record("session2 should exist")
+            return
+        }
+        service.startSession(at: t2)
+        service.finishSession(at: t3)
+
+        service.selectSession(sessionID: session1ID, at: t3)
+        service.resetSelectedSession(at: t3)
+
+        #expect(service.session?.id == session1ID)
+        #expect(service.state == .idle)
+        #expect(service.laps.isEmpty)
+        #expect(service.elapsedSession(at: t3) == 0)
+
+        #expect(service.sessionState(for: session2ID) == .stopped)
+        #expect(service.elapsedSession(for: session2ID, at: t3) == 10)
+    }
+
+    @MainActor
+    @Test func deleteSelectedSession_removesOnlyCurrentSession() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+
+        service.startSession(at: t0)
+        guard let session1ID = service.session?.id else {
+            Issue.record("session1 should exist")
+            return
+        }
+
+        service.addSession(at: t1)
+        guard let session2ID = service.session?.id else {
+            Issue.record("session2 should exist")
+            return
+        }
+
+        service.deleteSelectedSession(at: t1)
+
+        #expect(service.sessions.count == 1)
+        #expect(service.selectedSessionID == session1ID)
+        #expect(service.session?.id == session1ID)
+        #expect(service.sessions.contains(where: { $0.id == session2ID }) == false)
+    }
+
+    @MainActor
     @Test func pauseAndResume_keepsCompletedLapDurationConsistent() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let t0 = Date(timeIntervalSince1970: 1_000)

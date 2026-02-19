@@ -273,6 +273,45 @@ final class StopwatchService: ObservableObject {
         removePersistedState()
     }
 
+    func resetSelectedSession(at date: Date = Date()) {
+        guard let selectedSessionID, var context = sessionContexts[selectedSessionID] else { return }
+
+        context.state = .idle
+        context.session.startedAt = date
+        context.session.endedAt = nil
+        context.laps = []
+        context.selectedLapID = nil
+        context.pauseStartedAt = nil
+        context.lastLapActivationAt = nil
+        context.completedPauseIntervals = []
+
+        sessionContexts[selectedSessionID] = context
+        clock = date
+        applySelectedContext()
+        persistState()
+    }
+
+    func deleteSelectedSession(at date: Date = Date()) {
+        guard let selectedSessionID else { return }
+
+        sessionContexts.removeValue(forKey: selectedSessionID)
+        sessionOrder.removeAll { $0 == selectedSessionID }
+
+        if sessionOrder.isEmpty {
+            self.selectedSessionID = nil
+            nextSessionNumber = 1
+            clock = date
+            applySelectedContext()
+            removePersistedState()
+            return
+        }
+
+        self.selectedSessionID = sessionOrder[0]
+        clock = date
+        applySelectedContext()
+        persistState()
+    }
+
     func updateLapLabel(lapID: UUID, label: String) {
         guard
             let selectedSessionID,

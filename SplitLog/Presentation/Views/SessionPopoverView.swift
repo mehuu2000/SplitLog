@@ -15,6 +15,7 @@ struct SessionPopoverView: View {
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
     @State private var isShowingResetConfirmation = false
+    @State private var isShowingDeleteSessionConfirmation = false
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -168,22 +169,34 @@ struct SessionPopoverView: View {
                     .buttonBorderShape(.roundedRectangle(radius: 8))
                     .help("リセット")
                     .accessibilityLabel("リセット")
-                    .disabled(stopwatch.state == .idle)
+                    .disabled(stopwatch.session == nil)
+
+                    Button(action: requestDeleteSession) {
+                        Image(systemName: "trash")
+                            .frame(width: 14, height: 14)
+                    }
+                    .frame(width: 32, height: 32)
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .help("現在セッションを削除")
+                    .accessibilityLabel("現在セッションを削除")
+                    .disabled(stopwatch.session == nil)
                 }
             }
 
-            if isShowingResetConfirmation {
+            if isShowingResetConfirmation || isShowingDeleteSessionConfirmation {
                 Color.clear
                     .contentShape(Rectangle())
                     .ignoresSafeArea()
                     .onTapGesture {
                         isShowingResetConfirmation = false
+                        isShowingDeleteSessionConfirmation = false
                     }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("リセットしますか？")
+                    Text(isShowingDeleteSessionConfirmation ? "セッションを削除しますか？" : "リセットしますか？")
                         .font(.headline)
-                    Text("すべてのセッションとラップを初期状態に戻します。")
+                    Text(isShowingDeleteSessionConfirmation ? "現在表示中のセッションを削除します。" : "現在表示中のセッションとラップを初期状態に戻します。")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -191,12 +204,19 @@ struct SessionPopoverView: View {
                         Spacer()
                         Button("キャンセル") {
                             isShowingResetConfirmation = false
+                            isShowingDeleteSessionConfirmation = false
                         }
                         .buttonStyle(.bordered)
 
-                        Button("リセット", role: .destructive) {
+                        Button(isShowingDeleteSessionConfirmation ? "削除" : "リセット", role: .destructive) {
+                            let isDeleteAction = isShowingDeleteSessionConfirmation
                             isShowingResetConfirmation = false
-                            handleReset()
+                            isShowingDeleteSessionConfirmation = false
+                            if isDeleteAction {
+                                handleDeleteSession()
+                            } else {
+                                handleReset()
+                            }
                         }
                         .buttonStyle(.borderedProminent)
                     }
@@ -344,12 +364,23 @@ struct SessionPopoverView: View {
     }
 
     private func requestReset() {
+        isShowingDeleteSessionConfirmation = false
         isShowingResetConfirmation = true
+    }
+
+    private func requestDeleteSession() {
+        isShowingResetConfirmation = false
+        isShowingDeleteSessionConfirmation = true
     }
 
     private func handleReset() {
         commitActiveLapLabelEditIfNeeded()
-        stopwatch.resetToIdle()
+        stopwatch.resetSelectedSession()
+    }
+
+    private func handleDeleteSession() {
+        commitActiveLapLabelEditIfNeeded()
+        stopwatch.deleteSelectedSession()
     }
 
     private func beginLapLabelEdit(for lap: WorkLap) {
