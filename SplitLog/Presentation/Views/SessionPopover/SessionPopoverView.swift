@@ -48,10 +48,12 @@ struct SessionPopoverView: View {
 
     var body: some View {
         let referenceDate = stopwatch.clock
-        let displayReferenceDate = Date(timeIntervalSince1970: floor(referenceDate.timeIntervalSince1970))
         let timeline = timelineSlices(referenceDate: referenceDate)
-        let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: displayReferenceDate))
-        let lapDisplayedSeconds = displayedLapSeconds(referenceDate: displayReferenceDate)
+        let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
+        let lapDisplayedSeconds = displayedLapSeconds(
+            referenceDate: referenceDate,
+            totalElapsedSeconds: totalElapsedSeconds
+        )
 
         ZStack {
             VStack(alignment: .leading, spacing: 14) {
@@ -415,12 +417,80 @@ struct SessionPopoverView: View {
         )
     }
 
-    private func displayedLapSeconds(referenceDate: Date) -> [UUID: Int] {
-        Dictionary(
-            uniqueKeysWithValues: stopwatch.laps.map { lap in
-                (lap.id, durationSeconds(stopwatch.elapsedLap(lap, at: referenceDate)))
+    private func displayedLapSeconds(referenceDate: Date, totalElapsedSeconds: Int) -> [UUID: Int] {
+        struct Entry {
+            let lap: WorkLap
+            let baseSeconds: Int
+            let fraction: TimeInterval
+            let isSelected: Bool
+        }
+
+        let entries: [Entry] = stopwatch.laps.map { lap in
+            let raw = max(0, stopwatch.elapsedLap(lap, at: referenceDate))
+            let base = durationSeconds(raw)
+            let fraction = raw - TimeInterval(base)
+            return Entry(
+                lap: lap,
+                baseSeconds: base,
+                fraction: fraction,
+                isSelected: lap.id == stopwatch.selectedLapID
+            )
+        }
+
+        var result = Dictionary(uniqueKeysWithValues: entries.map { ($0.lap.id, $0.baseSeconds) })
+        let baseTotal = entries.reduce(0) { $0 + $1.baseSeconds }
+        var remaining = max(0, totalElapsedSeconds - baseTotal)
+        guard remaining > 0 else { return result }
+
+        let sortedByFraction = entries
+            .filter { $0.fraction > 0 }
+            .sorted { lhs, rhs in
+                if lhs.fraction == rhs.fraction {
+                    return lhs.lap.index > rhs.lap.index
+                }
+                return lhs.fraction > rhs.fraction
             }
-        )
+
+        func applyCarry(to candidates: [Entry], maxCount: Int) -> Int {
+            guard maxCount > 0, !candidates.isEmpty else { return 0 }
+            let granted = min(maxCount, candidates.count)
+            for entry in candidates.prefix(granted) {
+                result[entry.lap.id, default: entry.baseSeconds] += 1
+            }
+            return granted
+        }
+
+        if stopwatch.state == .running,
+           let selectedLapID = stopwatch.selectedLapID,
+           let selectedEntry = entries.first(where: { $0.lap.id == selectedLapID }) {
+            let nonSelectedEntries = entries.filter { $0.lap.id != selectedLapID && $0.fraction > 0 }
+            let fixedCarry = Int(floor(nonSelectedEntries.reduce(0) { $0 + $1.fraction }))
+            let fixedGranted = applyCarry(
+                to: nonSelectedEntries.sorted { lhs, rhs in
+                    if lhs.fraction == rhs.fraction {
+                        return lhs.lap.index > rhs.lap.index
+                    }
+                    return lhs.fraction > rhs.fraction
+                },
+                maxCount: min(remaining, fixedCarry)
+            )
+            remaining -= fixedGranted
+
+            if remaining > 0, selectedEntry.fraction > 0 {
+                result[selectedLapID, default: selectedEntry.baseSeconds] += 1
+                remaining -= 1
+            }
+        }
+
+        if remaining > 0 {
+            remaining -= applyCarry(to: sortedByFraction, maxCount: remaining)
+        }
+
+        if remaining > 0, let first = sortedByFraction.first {
+            result[first.lap.id, default: first.baseSeconds] += remaining
+        }
+
+        return result
     }
 
     private func formatDuration(seconds totalSeconds: Int) -> String {
