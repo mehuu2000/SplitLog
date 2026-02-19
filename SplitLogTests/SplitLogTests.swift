@@ -45,39 +45,50 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func finishSession_closesCurrentLapAndSession() {
+    @Test func finishSession_stopsSessionAndAllowsResume() {
         let service = StopwatchService(autoTick: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
         let t1 = Date(timeIntervalSince1970: 1_020)
         let t2 = Date(timeIntervalSince1970: 1_050)
+        let t3 = Date(timeIntervalSince1970: 1_100)
+        let t4 = Date(timeIntervalSince1970: 1_120)
         service.startSession(at: t0)
         service.finishLap(at: t1)
 
         service.finishSession(at: t2)
 
-        #expect(service.state == .finished)
-        #expect(service.session?.endedAt == t2)
-        #expect(service.completedLaps.count == 2)
-        #expect(service.currentLap == nil)
-        #expect(service.elapsedSession() == 50)
+        #expect(service.state == .stopped)
+        #expect(service.session?.endedAt == nil)
+        #expect(service.completedLaps.count == 1)
+        #expect(service.currentLap?.endedAt == nil)
+        #expect(service.elapsedSession(at: t4) == 50)
+
+        service.resumeSession(at: t3)
+        #expect(service.state == .running)
+        #expect(service.elapsedSession(at: t4) == 70)
     }
 
     @MainActor
-    @Test func startSession_afterFinished_restartsAsNewSession() {
+    @Test func startSession_afterStopped_resumesCurrentSession() {
         let service = StopwatchService(autoTick: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
         let t1 = Date(timeIntervalSince1970: 1_030)
-        let t2 = Date(timeIntervalSince1970: 2_000)
+        let t2 = Date(timeIntervalSince1970: 1_040)
+        let t3 = Date(timeIntervalSince1970: 1_100)
+        let t4 = Date(timeIntervalSince1970: 1_110)
 
         service.startSession(at: t0)
-        service.finishSession(at: t1)
-        service.startSession(at: t2)
+        let sessionID = service.session?.id
+        service.finishLap(at: t1)
+        service.finishSession(at: t2)
+        service.startSession(at: t3)
 
         #expect(service.state == .running)
-        #expect(service.session?.startedAt == t2)
+        #expect(service.session?.id == sessionID)
         #expect(service.session?.endedAt == nil)
-        #expect(service.laps.count == 1)
-        #expect(service.laps[0].index == 1)
+        #expect(service.laps.count == 2)
+        #expect(service.currentLap?.index == 2)
+        #expect(service.elapsedSession(at: t4) == 50)
     }
 
     @MainActor
@@ -117,19 +128,25 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func finishSession_whilePaused_usesPauseTimeAsSessionEnd() {
+    @Test func finishSession_whilePaused_staysStoppedUntilResume() {
         let service = StopwatchService(autoTick: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
         let pausedAt = Date(timeIntervalSince1970: 1_015)
-        let finishTappedAt = Date(timeIntervalSince1970: 1_060)
+        let stopTappedAt = Date(timeIntervalSince1970: 1_060)
+        let resumedAt = Date(timeIntervalSince1970: 1_080)
+        let checkAt = Date(timeIntervalSince1970: 1_090)
 
         service.startSession(at: t0)
         service.pauseSession(at: pausedAt)
-        service.finishSession(at: finishTappedAt)
+        service.finishSession(at: stopTappedAt)
 
-        #expect(service.state == .finished)
-        #expect(service.session?.endedAt == pausedAt)
-        #expect(service.elapsedSession() == 15)
+        #expect(service.state == .stopped)
+        #expect(service.session?.endedAt == nil)
+        #expect(service.elapsedSession(at: checkAt) == 15)
+
+        service.resumeSession(at: resumedAt)
+        #expect(service.state == .running)
+        #expect(service.elapsedSession(at: checkAt) == 25)
     }
 
     @MainActor
@@ -147,9 +164,10 @@ struct SplitLogTests {
         service.resumeSession(at: t3)
         service.finishSession(at: t4)
 
-        #expect(service.completedLaps.count == 2)
+        #expect(service.state == .stopped)
+        #expect(service.completedLaps.count == 1)
         #expect(service.elapsedLap(service.completedLaps[0]) == 10)
-        #expect(service.elapsedLap(service.completedLaps[1]) == 20)
+        #expect(service.elapsedCurrentLap(at: t4) == 20)
         #expect(service.elapsedSession() == 30)
     }
 

@@ -11,6 +11,7 @@ enum SessionState: String, Codable, Sendable {
     case idle
     case running
     case paused
+    case stopped
     case finished
 }
 

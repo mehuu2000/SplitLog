@@ -36,7 +36,15 @@ final class StopwatchService: ObservableObject {
     }
 
     func startSession(at date: Date = Date()) {
-        guard state != .running, state != .paused else { return }
+        switch state {
+        case .running:
+            return
+        case .paused, .stopped:
+            resumeSession(at: date)
+            return
+        case .idle, .finished:
+            break
+        }
 
         let sessionId = UUID()
         session = WorkSession(id: sessionId, startedAt: date, endedAt: nil)
@@ -89,7 +97,7 @@ final class StopwatchService: ObservableObject {
     }
 
     func resumeSession(at date: Date = Date()) {
-        guard state == .paused, let pausedAt = pauseStartedAt else { return }
+        guard (state == .paused || state == .stopped), let pausedAt = pauseStartedAt else { return }
         let resumedAt = max(date, pausedAt)
         completedPauseIntervals.append(DateInterval(start: pausedAt, end: resumedAt))
 
@@ -103,24 +111,18 @@ final class StopwatchService: ObservableObject {
     }
 
     func finishSession(at date: Date = Date()) {
-        guard (state == .running || state == .paused), var activeSession = session else { return }
+        guard (state == .running || state == .paused), session != nil else { return }
 
-        let finishedAt: Date
+        let stoppedAt: Date
         if state == .paused, let pausedAt = pauseStartedAt {
-            finishedAt = pausedAt
+            stoppedAt = pausedAt
         } else {
-            finishedAt = date
+            stoppedAt = date
+            pauseStartedAt = stoppedAt
         }
 
-        if let currentIndex = laps.lastIndex(where: { $0.endedAt == nil }) {
-            laps[currentIndex].endedAt = finishedAt
-        }
-
-        activeSession.endedAt = finishedAt
-        session = activeSession
-        pauseStartedAt = nil
-        state = .finished
-        clock = finishedAt
+        state = .stopped
+        clock = stoppedAt
         stopClock()
     }
 
@@ -205,7 +207,7 @@ final class StopwatchService: ObservableObject {
     }
 
     private func pausedClampedReferenceDate(_ date: Date) -> Date {
-        guard state == .paused, let pauseStartedAt else { return date }
+        guard (state == .paused || state == .stopped), let pauseStartedAt else { return date }
         return min(date, pauseStartedAt)
     }
 

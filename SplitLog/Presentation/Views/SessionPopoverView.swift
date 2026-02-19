@@ -120,21 +120,12 @@ struct SessionPopoverView: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 10) {
-                Button("作業開始", action: handleStart)
+                Button(primaryActionButtonTitle, action: handlePrimaryAction)
                     .buttonStyle(.borderedProminent)
-                    .disabled(stopwatch.state == .running || stopwatch.state == .paused)
-
-                Button(pauseButtonTitle, action: handlePauseResume)
-                    .buttonStyle(.bordered)
-                    .disabled(stopwatch.state != .running && stopwatch.state != .paused)
 
                 Button("ラップ終了", action: handleFinishLap)
                     .buttonStyle(.bordered)
                     .disabled(stopwatch.state != .running)
-
-                Button("作業終了", action: handleFinishSession)
-                    .buttonStyle(.bordered)
-                    .disabled(stopwatch.state == .idle || stopwatch.state == .finished)
             }
         }
         .padding(14)
@@ -165,41 +156,43 @@ struct SessionPopoverView: View {
             "Running"
         case .paused:
             "Paused"
+        case .stopped:
+            "Stopped"
         case .finished:
             "Finished"
         }
     }
 
-    private var pauseButtonTitle: String {
-        stopwatch.state == .paused ? "再開" : "一時停止"
+    private var primaryActionButtonTitle: String {
+        switch stopwatch.state {
+        case .idle, .finished:
+            "作業開始"
+        case .running, .paused:
+            "作業終了"
+        case .stopped:
+            "作業再開"
+        }
     }
 
-    private func handleStart() {
+    private func handlePrimaryAction() {
         commitActiveLapLabelEditIfNeeded()
+
+        if stopwatch.state == .stopped {
+            stopwatch.resumeSession()
+            return
+        }
+
+        if stopwatch.state == .running || stopwatch.state == .paused {
+            stopwatch.finishSession()
+            return
+        }
+
         stopwatch.startSession()
     }
 
     private func handleFinishLap() {
         commitActiveLapLabelEditIfNeeded()
         stopwatch.finishLap()
-    }
-
-    private func handlePauseResume() {
-        commitActiveLapLabelEditIfNeeded()
-
-        if stopwatch.state == .running {
-            stopwatch.pauseSession()
-            return
-        }
-
-        if stopwatch.state == .paused {
-            stopwatch.resumeSession()
-        }
-    }
-
-    private func handleFinishSession() {
-        commitActiveLapLabelEditIfNeeded()
-        stopwatch.finishSession()
     }
 
     private func beginLapLabelEdit(for lap: WorkLap) {
