@@ -150,19 +150,14 @@ struct SessionPopoverView: View {
     }
 
     private var stateText: String {
-        switch stopwatch.state {
-        case .idle:
-            "Idle"
-        case .running:
-            "Running"
-        case .paused:
-            "Paused"
-        case .finished:
-            "Finished"
-        }
+        stopwatchStateText
     }
 
     private var subtitleText: String {
+        stopwatchStateText
+    }
+
+    private var stopwatchStateText: String {
         switch stopwatch.state {
         case .idle:
             "Idle"
@@ -218,11 +213,10 @@ struct SessionPopoverView: View {
     }
 
     private func commitLapLabelEdit(lapID: UUID) {
+        guard editingLapID == lapID else { return }
         stopwatch.updateLapLabel(lapID: lapID, label: editingLapLabelDraft)
 
-        if editingLapID == lapID {
-            editingLapID = nil
-        }
+        editingLapID = nil
         editingLapLabelDraft = ""
     }
 
@@ -386,7 +380,6 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
         var parent: InlineLapLabelEditor
         weak var textField: NSTextField?
         private var outsideClickMonitor: Any?
-        private var lastAppliedFocusToken: Int = -1
         private var activeFocusRequestToken: Int = -1
         private var isOutsideCommitEnabled = false
 
@@ -466,7 +459,6 @@ private struct InlineLapLabelEditor: NSViewRepresentable {
                 guard self.parent.focusToken == token else { return }
 
                 if let window = field.window, window.makeFirstResponder(field) {
-                    self.lastAppliedFocusToken = token
                     self.isOutsideCommitEnabled = true
                     return
                 }
