@@ -73,7 +73,7 @@ struct SessionSettingsOverlayView: View {
                 Text("設定")
                     .font(.headline)
 
-                ScrollView(.vertical, showsIndicators: true) {
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("テーマカラー")
