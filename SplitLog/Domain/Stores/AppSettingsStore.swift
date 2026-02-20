@@ -80,6 +80,11 @@ final class AppSettingsStore: ObservableObject {
         update(.default)
     }
 
+    func consumePersistenceErrorEvent(id: UUID) {
+        guard persistenceErrorEvent?.id == id else { return }
+        persistenceErrorEvent = nil
+    }
+
     private func persistIfNeeded() {
         guard canPersist else { return }
         do {

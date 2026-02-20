@@ -442,6 +442,11 @@ final class StopwatchService: ObservableObject {
         return elapsedLap(currentLap, at: referenceDate)
     }
 
+    func consumePersistenceErrorEvent(id: UUID) {
+        guard persistenceErrorEvent?.id == id else { return }
+        persistenceErrorEvent = nil
+    }
+
     func elapsedLap(_ lap: WorkLap, at referenceDate: Date? = nil) -> TimeInterval {
         guard let context = currentContext else { return max(0, lap.accumulatedDuration) }
         return elapsedLap(lap, in: context, at: referenceDate ?? clock)

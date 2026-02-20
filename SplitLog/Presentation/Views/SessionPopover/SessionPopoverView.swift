@@ -467,9 +467,15 @@ struct SessionPopoverView: View {
         }
         .onReceive(stopwatch.$persistenceErrorEvent.compactMap { $0 }) { event in
             showToast(event.message, style: .error)
+            DispatchQueue.main.async {
+                stopwatch.consumePersistenceErrorEvent(id: event.id)
+            }
         }
         .onReceive(appSettingsStore.$persistenceErrorEvent.compactMap { $0 }) { event in
             showToast(event.message, style: .error)
+            DispatchQueue.main.async {
+                appSettingsStore.consumePersistenceErrorEvent(id: event.id)
+            }
         }
     }
 
