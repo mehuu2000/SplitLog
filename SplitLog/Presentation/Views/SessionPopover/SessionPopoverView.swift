@@ -21,6 +21,21 @@ struct SessionPopoverView: View {
         var fontSize: CGFloat
     }
 
+    private struct LapSecondsSnapshot: Equatable {
+        var id: UUID
+        var index: Int
+        var accumulatedWholeSeconds: Int
+        var hasEnded: Bool
+    }
+
+    private struct LapSecondsComputationKey: Equatable {
+        var sessionID: UUID?
+        var selectedLapID: UUID?
+        var state: SessionState
+        var totalElapsedSeconds: Int
+        var lapSnapshots: [LapSecondsSnapshot]
+    }
+
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -72,8 +87,9 @@ struct SessionPopoverView: View {
     @State private var toastGeneration: Int = 0
     @State private var sessionTitleUnderlineWidth: CGFloat = 32
     @State private var sessionTitleUnderlineMeasurementCache = SessionTitleUnderlineMeasurement(text: "", fontSize: 0)
-    // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
-    private let ringBlockDuration: TimeInterval = 30
+    @State private var lapSecondsCacheKey: LapSecondsComputationKey?
+    @State private var lapSecondsCacheValue: [UUID: Int] = [:]
+    private let ringBlockDuration: TimeInterval = 3 * 60 * 60
     private let sessionTitleAreaWidth: CGFloat = 250
     private let compactSessionTitleAreaWidth: CGFloat = 140
     private let compactSessionTitleEditingAreaWidth: CGFloat = 140
@@ -103,12 +119,16 @@ struct SessionPopoverView: View {
         let showTimelineRing = appSettingsStore.showTimelineRing
         let popoverSize = Self.popoverSize(showTimelineRing: showTimelineRing)
         let referenceDate = stopwatch.clock
-        let timeline = timelineSlices(referenceDate: referenceDate)
         let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
-        let lapDisplayedSeconds = displayedLapSeconds(
+        let lapSecondsKey = makeLapSecondsComputationKey(totalElapsedSeconds: totalElapsedSeconds)
+        let lapDisplayedSeconds = resolvedLapDisplayedSeconds(
             referenceDate: referenceDate,
-            totalElapsedSeconds: totalElapsedSeconds
+            totalElapsedSeconds: totalElapsedSeconds,
+            key: lapSecondsKey
         )
+        let timeline = showTimelineRing
+            ? timelineSlices(referenceDate: referenceDate)
+            : (inner: [], outer: [], showOuterTrack: false)
         let lapListView = SessionLapListView(
             laps: stopwatch.laps,
             selectedLapID: stopwatch.selectedLapID,
@@ -464,6 +484,11 @@ struct SessionPopoverView: View {
         .onAppear {
             stopwatch.setDisplayActive(true, showTimelineRing: showTimelineRing)
             refreshSessionTitleUnderlineWidth(force: true)
+            refreshLapDisplayedSecondsCache(
+                referenceDate: referenceDate,
+                totalElapsedSeconds: totalElapsedSeconds,
+                key: lapSecondsKey
+            )
         }
         .onDisappear {
             commitPendingInlineEdits()
@@ -472,6 +497,13 @@ struct SessionPopoverView: View {
         }
         .onChange(of: appSettingsStore.showTimelineRing) { _, isVisible in
             stopwatch.setDisplayActive(true, showTimelineRing: isVisible)
+        }
+        .onChange(of: lapSecondsKey) { _, newKey in
+            refreshLapDisplayedSecondsCache(
+                referenceDate: stopwatch.clock,
+                totalElapsedSeconds: newKey.totalElapsedSeconds,
+                key: newKey
+            )
         }
         .onChange(of: selectedSessionTitleText) { _, _ in
             refreshSessionTitleUnderlineWidth()
@@ -771,7 +803,7 @@ struct SessionPopoverView: View {
     private func handleDeleteAllLapData() {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
-        let succeeded = stopwatch.clearAllLapsAndMemos()
+        let succeeded = stopwatch.clearAllLapsAndMemos(persistImmediately: true)
         if succeeded {
             showToast("Split情報を削除しました")
         }
@@ -1134,6 +1166,49 @@ struct SessionPopoverView: View {
         }
 
         return result
+    }
+
+    private func makeLapSecondsComputationKey(totalElapsedSeconds: Int) -> LapSecondsComputationKey {
+        LapSecondsComputationKey(
+            sessionID: stopwatch.selectedSessionID,
+            selectedLapID: stopwatch.selectedLapID,
+            state: stopwatch.state,
+            totalElapsedSeconds: totalElapsedSeconds,
+            lapSnapshots: stopwatch.laps.map { lap in
+                LapSecondsSnapshot(
+                    id: lap.id,
+                    index: lap.index,
+                    accumulatedWholeSeconds: durationSeconds(lap.accumulatedDuration),
+                    hasEnded: lap.endedAt != nil
+                )
+            }
+        )
+    }
+
+    private func resolvedLapDisplayedSeconds(
+        referenceDate: Date,
+        totalElapsedSeconds: Int,
+        key: LapSecondsComputationKey
+    ) -> [UUID: Int] {
+        if lapSecondsCacheKey == key {
+            return lapSecondsCacheValue
+        }
+        return displayedLapSeconds(
+            referenceDate: referenceDate,
+            totalElapsedSeconds: totalElapsedSeconds
+        )
+    }
+
+    private func refreshLapDisplayedSecondsCache(
+        referenceDate: Date,
+        totalElapsedSeconds: Int,
+        key: LapSecondsComputationKey
+    ) {
+        lapSecondsCacheValue = displayedLapSeconds(
+            referenceDate: referenceDate,
+            totalElapsedSeconds: totalElapsedSeconds
+        )
+        lapSecondsCacheKey = key
     }
 
     private func formatDuration(seconds totalSeconds: Int) -> String {

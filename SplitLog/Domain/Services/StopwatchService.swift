@@ -302,7 +302,10 @@ final class StopwatchService: ObservableObject {
     }
 
     @discardableResult
-    func clearAllLapsAndMemos(at date: Date = Date()) -> Bool {
+    func clearAllLapsAndMemos(
+        at date: Date = Date(),
+        persistImmediately: Bool = false
+    ) -> Bool {
         guard !sessionOrder.isEmpty else { return true }
 
         for sessionID in sessionOrder {
@@ -324,7 +327,11 @@ final class StopwatchService: ObservableObject {
             self.selectedSessionID = sessionOrder.first
         }
 
-        commitSelectionUpdate(at: date)
+        commitSelectionUpdate(at: date, persist: false)
+        if persistImmediately {
+            return persistState(mode: .immediate)
+        }
+        persistState()
         return lastPersistenceSucceeded
     }
 
