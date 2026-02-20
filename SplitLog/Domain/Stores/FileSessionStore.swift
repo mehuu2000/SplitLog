@@ -18,7 +18,9 @@ struct FileSessionStore: SessionStore {
         guard let fileURL else { return }
 
         guard let snapshot else {
-            try? FileManager.default.removeItem(at: fileURL)
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+            }
             return
         }
 

@@ -6,10 +6,16 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
 struct SessionPopoverView: View {
+    private enum ToastStyle {
+        case success
+        case error
+    }
+
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -57,6 +63,7 @@ struct SessionPopoverView: View {
     @State private var memoLapTextDraft = ""
     @State private var sessionSummaryDraft = ""
     @State private var toastMessage: String?
+    @State private var toastStyle: ToastStyle = .success
     @State private var toastGeneration: Int = 0
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
@@ -424,16 +431,16 @@ struct SessionPopoverView: View {
                 VStack {
                     Text(toastMessage)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.primary.opacity(0.9))
+                        .foregroundStyle(toastForegroundColor)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.92))
+                                .fill(toastBackgroundColor)
                         )
                         .overlay(
                             Capsule()
-                                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                                .stroke(toastBorderColor, lineWidth: 1)
                         )
                     Spacer()
                 }
@@ -454,6 +461,12 @@ struct SessionPopoverView: View {
             commitPendingInlineEdits()
             commitActiveLapMemoEditIfNeeded()
             stopwatch.setDisplayActive(false)
+        }
+        .onReceive(stopwatch.$persistenceErrorEvent.compactMap { $0 }) { event in
+            showToast(event.message, style: .error)
+        }
+        .onReceive(appSettingsStore.$persistenceErrorEvent.compactMap { $0 }) { event in
+            showToast(event.message, style: .error)
         }
     }
 
@@ -600,6 +613,33 @@ struct SessionPopoverView: View {
         SessionThemeColorResolver(mode: appSettingsStore.themeMode)
     }
 
+    private var toastForegroundColor: Color {
+        switch toastStyle {
+        case .success:
+            Color.primary.opacity(0.9)
+        case .error:
+            Color(red: 0.5, green: 0.08, blue: 0.08)
+        }
+    }
+
+    private var toastBackgroundColor: Color {
+        switch toastStyle {
+        case .success:
+            Color.white.opacity(0.92)
+        case .error:
+            Color(red: 1.0, green: 0.92, blue: 0.92)
+        }
+    }
+
+    private var toastBorderColor: Color {
+        switch toastStyle {
+        case .success:
+            Color.primary.opacity(0.15)
+        case .error:
+            Color(red: 0.85, green: 0.35, blue: 0.35)
+        }
+    }
+
     private var stopwatchStateText: String {
         switch stopwatch.state {
         case .idle:
@@ -685,34 +725,43 @@ struct SessionPopoverView: View {
     private func handleDeleteAllSessionData() {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
-        stopwatch.resetToIdle()
-        showToast("セッション情報を削除しました")
+        let succeeded = stopwatch.resetToIdle()
+        if succeeded {
+            showToast("セッション情報を削除しました")
+        }
     }
 
     private func handleDeleteAllLapData() {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
-        stopwatch.clearAllLapsAndMemos()
-        showToast("Split情報を削除しました")
+        let succeeded = stopwatch.clearAllLapsAndMemos()
+        if succeeded {
+            showToast("Split情報を削除しました")
+        }
     }
 
     private func handleResetAllSettings() {
         appSettingsStore.resetToDefaults()
-        showToast("設定を初期化しました")
+        if appSettingsStore.lastPersistenceSucceeded {
+            showToast("設定を初期化しました")
+        }
     }
 
     private func handleInitializeAllData() {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
-        stopwatch.resetToIdle()
+        let dataResetSucceeded = stopwatch.resetToIdle()
         appSettingsStore.resetToDefaults()
-        showToast("全データを初期化しました")
+        if dataResetSucceeded && appSettingsStore.lastPersistenceSucceeded {
+            showToast("全データを初期化しました")
+        }
     }
 
-    private func showToast(_ message: String) {
+    private func showToast(_ message: String, style: ToastStyle = .success) {
         toastGeneration += 1
         let generation = toastGeneration
         withAnimation(.easeOut(duration: 0.18)) {
+            toastStyle = style
             toastMessage = message
         }
 
@@ -825,7 +874,12 @@ struct SessionPopoverView: View {
     private func copySessionSummaryToPasteboard() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(sessionSummaryDraft, forType: .string)
+        let didCopy = pasteboard.setString(sessionSummaryDraft, forType: .string)
+        if didCopy {
+            showToast("セッションまとめをコピーしました")
+        } else {
+            showToast("セッションまとめのコピーに失敗しました。", style: .error)
+        }
     }
 
     private func buildSessionSummaryText(

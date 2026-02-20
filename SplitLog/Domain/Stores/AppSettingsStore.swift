@@ -10,17 +10,23 @@ import Foundation
 
 @MainActor
 final class AppSettingsStore: ObservableObject {
+    struct PersistenceErrorEvent: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+    }
+
     @Published private(set) var settings: AppSettings {
         didSet {
             persistIfNeeded()
         }
     }
+    @Published private(set) var persistenceErrorEvent: PersistenceErrorEvent?
 
     private let userDefaults: UserDefaults
     private let storageKey: String
     private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
     private var canPersist = false
+    private(set) var lastPersistenceSucceeded: Bool = true
 
     init(userDefaults: UserDefaults = .standard, storageKey: String = "app_settings") {
         self.userDefaults = userDefaults
@@ -76,7 +82,13 @@ final class AppSettingsStore: ObservableObject {
 
     private func persistIfNeeded() {
         guard canPersist else { return }
-        persist(settings, to: userDefaults, using: storageKey, encoder: encoder)
+        do {
+            try persist(settings, to: userDefaults, using: storageKey, encoder: encoder)
+            lastPersistenceSucceeded = true
+        } catch {
+            lastPersistenceSucceeded = false
+            persistenceErrorEvent = PersistenceErrorEvent(message: "設定の保存に失敗しました。")
+        }
     }
 
     private static func loadSettings(from userDefaults: UserDefaults, using storageKey: String) -> AppSettings {
@@ -94,8 +106,8 @@ final class AppSettingsStore: ObservableObject {
         to userDefaults: UserDefaults,
         using storageKey: String,
         encoder: JSONEncoder
-    ) {
-        guard let data = try? encoder.encode(settings) else { return }
+    ) throws {
+        let data = try encoder.encode(settings)
         userDefaults.set(data, forKey: storageKey)
     }
 }

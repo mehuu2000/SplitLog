@@ -10,6 +10,11 @@ import Foundation
 
 @MainActor
 final class StopwatchService: ObservableObject {
+    struct PersistenceErrorEvent: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+    }
+
     @Published private(set) var sessions: [WorkSession] = []
     @Published private(set) var selectedSessionID: UUID?
 
@@ -18,6 +23,7 @@ final class StopwatchService: ObservableObject {
     @Published private(set) var laps: [WorkLap] = []
     @Published private(set) var selectedLapID: UUID?
     @Published private(set) var clock: Date = Date()
+    @Published private(set) var persistenceErrorEvent: PersistenceErrorEvent?
 
     private var timerCancellable: AnyCancellable?
     private let autoTick: Bool
@@ -30,6 +36,7 @@ final class StopwatchService: ObservableObject {
     private var nextSessionNumber: Int = 1
     private let sessionStore: SessionStore?
     private let restoreReferenceDate: Date?
+    private(set) var lastPersistenceSucceeded: Bool = true
 
     private struct SessionContext: Codable, Sendable {
         var session: WorkSession
@@ -239,7 +246,8 @@ final class StopwatchService: ObservableObject {
         commitSelectedContextUpdate(context, for: selectedSessionID, at: stoppedAt)
     }
 
-    func resetToIdle() {
+    @discardableResult
+    func resetToIdle() -> Bool {
         sessionContexts = [:]
         sessionOrder = []
         sessions = []
@@ -253,7 +261,7 @@ final class StopwatchService: ObservableObject {
         clock = Date()
         stopClock()
 
-        removePersistedState()
+        return removePersistedState()
     }
 
     func resetSelectedSession(at date: Date = Date()) {
@@ -271,8 +279,9 @@ final class StopwatchService: ObservableObject {
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
-    func clearAllLapsAndMemos(at date: Date = Date()) {
-        guard !sessionOrder.isEmpty else { return }
+    @discardableResult
+    func clearAllLapsAndMemos(at date: Date = Date()) -> Bool {
+        guard !sessionOrder.isEmpty else { return true }
 
         for sessionID in sessionOrder {
             guard var context = sessionContexts[sessionID] else { continue }
@@ -294,6 +303,7 @@ final class StopwatchService: ObservableObject {
         }
 
         commitSelectionUpdate(at: date)
+        return lastPersistenceSucceeded
     }
 
     func deleteSelectedSession(at date: Date = Date()) {
@@ -700,7 +710,15 @@ final class StopwatchService: ObservableObject {
 
     private func restorePersistedState() {
         guard let sessionStore else { return }
-        guard let restoredSnapshot = try? sessionStore.loadSnapshot() else { return }
+        let restoredSnapshot: StopwatchStorageSnapshot?
+        do {
+            restoredSnapshot = try sessionStore.loadSnapshot()
+        } catch {
+            lastPersistenceSucceeded = false
+            reportPersistenceError("セッションデータの読み込みに失敗しました。")
+            return
+        }
+        guard let restoredSnapshot else { return }
         let restored = normalizedSnapshotForRestore(
             restoredSnapshot,
             restoreDate: restoreReferenceDate ?? Date()
@@ -738,8 +756,12 @@ final class StopwatchService: ObservableObject {
         }
     }
 
-    private func persistState(savedAt: Date? = nil) {
-        guard let sessionStore else { return }
+    @discardableResult
+    private func persistState(savedAt: Date? = nil) -> Bool {
+        guard let sessionStore else {
+            lastPersistenceSucceeded = true
+            return true
+        }
 
         let timestamp = savedAt ?? clock
         let payload = StopwatchStorageSnapshot(
@@ -752,14 +774,35 @@ final class StopwatchService: ObservableObject {
 
         do {
             try sessionStore.saveSnapshot(payload)
+            lastPersistenceSucceeded = true
+            return true
         } catch {
-            // Keep runtime behavior unchanged even if persistence fails.
+            lastPersistenceSucceeded = false
+            reportPersistenceError("セッションデータの保存に失敗しました。")
+            return false
         }
     }
 
-    private func removePersistedState() {
-        guard let sessionStore else { return }
-        try? sessionStore.saveSnapshot(nil)
+    @discardableResult
+    private func removePersistedState() -> Bool {
+        guard let sessionStore else {
+            lastPersistenceSucceeded = true
+            return true
+        }
+
+        do {
+            try sessionStore.saveSnapshot(nil)
+            lastPersistenceSucceeded = true
+            return true
+        } catch {
+            lastPersistenceSucceeded = false
+            reportPersistenceError("セッションデータの削除に失敗しました。")
+            return false
+        }
+    }
+
+    private func reportPersistenceError(_ message: String) {
+        persistenceErrorEvent = PersistenceErrorEvent(message: message)
     }
 
     private func persistedContext(from context: SessionContext) -> PersistedSessionContext {
