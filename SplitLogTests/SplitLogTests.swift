@@ -43,6 +43,11 @@ struct SplitLogTests {
     }
 
     @MainActor
+    private func waitForCoalescedPersistence() async {
+        try? await Task.sleep(nanoseconds: 350_000_000)
+    }
+
+    @MainActor
     @Test func startSession_startsRunningStateWithFirstLap() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let startedAt = Date(timeIntervalSince1970: 1_000)
@@ -481,7 +486,7 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func restore_runningSnapshot_isNormalizedToStoppedAtRelaunchTime() {
+    @Test func restore_runningSnapshot_isNormalizedToStoppedAtRelaunchTime() async {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let t1 = Date(timeIntervalSince1970: 1_010)
@@ -491,6 +496,7 @@ struct SplitLogTests {
         let source = StopwatchService(autoTick: false, sessionStore: store)
         source.startSession(at: t0)
         source.finishLap(at: t1) // persists while still running
+        await waitForCoalescedPersistence()
 
         let restored = StopwatchService(
             autoTick: false,
@@ -524,7 +530,7 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func updateLapMemo_persistsAndRestoresMemoText() throws {
+    @Test func updateLapMemo_persistsAndRestoresMemoText() async throws {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let memo = "次回はここから再開"
@@ -533,13 +539,14 @@ struct SplitLogTests {
         source.startSession(at: t0)
         let lapID = try #require(source.currentLap?.id)
         source.updateLapMemo(lapID: lapID, memo: memo)
+        await waitForCoalescedPersistence()
 
         let restored = StopwatchService(autoTick: false, sessionStore: store)
         #expect(restored.currentLap?.memo == memo)
     }
 
     @MainActor
-    @Test func updateSessionTitle_persistsAndRestoresTitle() throws {
+    @Test func updateSessionTitle_persistsAndRestoresTitle() async throws {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let title = "朝の集中作業"
@@ -548,6 +555,7 @@ struct SplitLogTests {
         source.startSession(at: t0)
         let sessionID = try #require(source.session?.id)
         source.updateSessionTitle(sessionID: sessionID, title: title)
+        await waitForCoalescedPersistence()
 
         let restored = StopwatchService(autoTick: false, sessionStore: store)
         #expect(restored.session?.title == title)
@@ -568,6 +576,7 @@ struct SplitLogTests {
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
+            totalPausedDuration: 0,
             completedPauseIntervals: []
         )
         let context2 = PersistedSessionContext(
@@ -577,6 +586,7 @@ struct SplitLogTests {
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
+            totalPausedDuration: 0,
             completedPauseIntervals: []
         )
 
@@ -633,6 +643,7 @@ struct SplitLogTests {
             state: .stopped,
             pauseStartedAt: t2,
             lastLapActivationAt: nil,
+            totalPausedDuration: 0,
             completedPauseIntervals: []
         )
 
