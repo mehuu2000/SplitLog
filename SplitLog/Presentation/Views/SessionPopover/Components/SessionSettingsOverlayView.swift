@@ -61,6 +61,7 @@ struct SessionSettingsOverlayView: View {
     let onInitializeAllData: () -> Void
     let onClose: () -> Void
     @State private var pendingStorageAction: StorageAction?
+    @State private var previewDate: Date = Date()
 
     var body: some View {
         ZStack {
@@ -170,9 +171,9 @@ struct SessionSettingsOverlayView: View {
                                         }
                                     )
                                 ) {
-                                    Text("N.Mh")
+                                    Text(decimalHoursPreviewText(for: previewDate))
                                         .tag(SummaryTimeFormat.decimalHours)
-                                    Text("N時間M分")
+                                    Text(hourMinutePreviewText(for: previewDate))
                                         .tag(SummaryTimeFormat.hourMinute)
                                 }
                                 .pickerStyle(.menu)
@@ -254,6 +255,9 @@ struct SessionSettingsOverlayView: View {
                 )
             }
         }
+        .onAppear {
+            previewDate = Date()
+        }
     }
 
     @ViewBuilder
@@ -296,5 +300,20 @@ struct SessionSettingsOverlayView: View {
         case .initializeAllData:
             onInitializeAllData()
         }
+    }
+
+    private func decimalHoursPreviewText(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let hour = max(0, components.hour ?? 0)
+        let minute = max(0, components.minute ?? 0)
+        let decimalHours = Double(hour) + (Double(minute) / 60.0)
+        return String(format: "%.1fh", decimalHours)
+    }
+
+    private func hourMinutePreviewText(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let hour = max(0, components.hour ?? 0)
+        let minute = max(0, components.minute ?? 0)
+        return "\(hour)時間\(minute)分"
     }
 }
