@@ -190,19 +190,21 @@ struct SessionTimelineRingView: View {
     }
 }
 
-#Preview {
-    SessionTimelineRingView(
-        innerSlices: [
-            TimelineRingSlice(id: "1", startRatio: 0.0, endRatio: 0.25, color: .red),
-            TimelineRingSlice(id: "2", startRatio: 0.25, endRatio: 0.5, color: .green),
-            TimelineRingSlice(id: "3", startRatio: 0.5, endRatio: 0.75, color: .orange),
-            TimelineRingSlice(id: "4", startRatio: 0.75, endRatio: 1.0, color: .blue),
-        ],
-        outerSlices: [
-            TimelineRingSlice(id: "5", startRatio: 0.0, endRatio: 0.45, color: .purple),
-        ],
-        showOuterTrack: true
-    )
-    .frame(width: 220, height: 220)
-    .padding()
+struct SessionTimelineRingView_Previews: PreviewProvider {
+    static var previews: some View {
+        SessionTimelineRingView(
+            innerSlices: [
+                TimelineRingSlice(id: "1", startRatio: 0.0, endRatio: 0.25, color: .red),
+                TimelineRingSlice(id: "2", startRatio: 0.25, endRatio: 0.5, color: .green),
+                TimelineRingSlice(id: "3", startRatio: 0.5, endRatio: 0.75, color: .orange),
+                TimelineRingSlice(id: "4", startRatio: 0.75, endRatio: 1.0, color: .blue),
+            ],
+            outerSlices: [
+                TimelineRingSlice(id: "5", startRatio: 0.0, endRatio: 0.45, color: .purple),
+            ],
+            showOuterTrack: true
+        )
+        .frame(width: 220, height: 220)
+        .padding()
+    }
 }
