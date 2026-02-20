@@ -16,6 +16,11 @@ struct SessionPopoverView: View {
         case error
     }
 
+    private struct SessionTitleUnderlineMeasurement: Equatable {
+        var text: String
+        var fontSize: CGFloat
+    }
+
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -65,6 +70,8 @@ struct SessionPopoverView: View {
     @State private var toastMessage: String?
     @State private var toastStyle: ToastStyle = .success
     @State private var toastGeneration: Int = 0
+    @State private var sessionTitleUnderlineWidth: CGFloat = 32
+    @State private var sessionTitleUnderlineMeasurementCache = SessionTitleUnderlineMeasurement(text: "", fontSize: 0)
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -456,6 +463,7 @@ struct SessionPopoverView: View {
         .background(.regularMaterial)
         .onAppear {
             stopwatch.setDisplayActive(true, showTimelineRing: showTimelineRing)
+            refreshSessionTitleUnderlineWidth(force: true)
         }
         .onDisappear {
             commitPendingInlineEdits()
@@ -464,6 +472,16 @@ struct SessionPopoverView: View {
         }
         .onChange(of: appSettingsStore.showTimelineRing) { _, isVisible in
             stopwatch.setDisplayActive(true, showTimelineRing: isVisible)
+        }
+        .onChange(of: selectedSessionTitleText) { _, _ in
+            refreshSessionTitleUnderlineWidth()
+        }
+        .onChange(of: editingSessionTitleDraft) { _, _ in
+            guard isEditingSelectedSessionTitle else { return }
+            refreshSessionTitleUnderlineWidth()
+        }
+        .onChange(of: isEditingSelectedSessionTitle) { _, _ in
+            refreshSessionTitleUnderlineWidth(force: true)
         }
         .onReceive(stopwatch.$persistenceErrorEvent.compactMap { $0 }) { event in
             showToast(event.message, style: .error)
@@ -488,18 +506,16 @@ struct SessionPopoverView: View {
         stopwatch.session?.title ?? "セッション未選択"
     }
 
-    private var sessionTitleUnderlineWidth: CGFloat {
-        let baseText = isEditingSelectedSessionTitle ? editingSessionTitleDraft : selectedSessionTitleText
-        let text = baseText.isEmpty ? " " : baseText
-        let fontSize: CGFloat = isEditingSelectedSessionTitle ? 14 : 16
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let measuredWidth = (text as NSString).size(withAttributes: [.font: font]).width
-        return max(32, ceil(measuredWidth) + 4)
-    }
-
     private var isEditingSelectedSessionTitle: Bool {
         guard let editingSessionID, let selectedSessionID = stopwatch.selectedSessionID else { return false }
         return editingSessionID == selectedSessionID
+    }
+
+    private var sessionTitleUnderlineTargetMeasurement: SessionTitleUnderlineMeasurement {
+        let baseText = isEditingSelectedSessionTitle ? editingSessionTitleDraft : selectedSessionTitleText
+        let normalizedText = baseText.isEmpty ? " " : baseText
+        let fontSize: CGFloat = isEditingSelectedSessionTitle ? 14 : 16
+        return SessionTitleUnderlineMeasurement(text: normalizedText, fontSize: fontSize)
     }
 
     @ViewBuilder
@@ -593,6 +609,18 @@ struct SessionPopoverView: View {
     private var subtitleText: String {
         guard !stopwatch.laps.isEmpty else { return "" }
         return stopwatchStateText
+    }
+
+    private func refreshSessionTitleUnderlineWidth(force: Bool = false) {
+        let target = sessionTitleUnderlineTargetMeasurement
+        guard force || sessionTitleUnderlineMeasurementCache != target else {
+            return
+        }
+
+        let font = NSFont.systemFont(ofSize: target.fontSize, weight: .semibold)
+        let measuredWidth = (target.text as NSString).size(withAttributes: [.font: font]).width
+        sessionTitleUnderlineWidth = max(32, ceil(measuredWidth) + 4)
+        sessionTitleUnderlineMeasurementCache = target
     }
 
     private func sessionSummaryTimeFormatButtonText(referenceDate: Date) -> String {
