@@ -1,0 +1,79 @@
+//
+//  AppSettingsStore.swift
+//  SplitLog
+//
+//  Created by Codex on 2026/02/20.
+//
+
+import Combine
+import Foundation
+
+@MainActor
+final class AppSettingsStore: ObservableObject {
+    @Published private(set) var settings: AppSettings {
+        didSet {
+            persistIfNeeded()
+        }
+    }
+
+    private let userDefaults: UserDefaults
+    private let storageKey: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    private var canPersist = false
+
+    init(userDefaults: UserDefaults = .standard, storageKey: String = "app_settings") {
+        self.userDefaults = userDefaults
+        self.storageKey = storageKey
+        self.settings = Self.loadSettings(from: userDefaults, using: storageKey)
+        self.canPersist = true
+    }
+
+    var themeMode: ThemeMode {
+        settings.themeMode
+    }
+
+    var showTimelineRing: Bool {
+        settings.showTimelineRing
+    }
+
+    func setThemeMode(_ themeMode: ThemeMode) {
+        guard settings.themeMode != themeMode else { return }
+        settings.themeMode = themeMode
+    }
+
+    func setShowTimelineRing(_ isVisible: Bool) {
+        guard settings.showTimelineRing != isVisible else { return }
+        settings.showTimelineRing = isVisible
+    }
+
+    func update(_ settings: AppSettings) {
+        guard self.settings != settings else { return }
+        self.settings = settings
+    }
+
+    private func persistIfNeeded() {
+        guard canPersist else { return }
+        persist(settings, to: userDefaults, using: storageKey, encoder: encoder)
+    }
+
+    private static func loadSettings(from userDefaults: UserDefaults, using storageKey: String) -> AppSettings {
+        guard
+            let data = userDefaults.data(forKey: storageKey),
+            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data)
+        else {
+            return .default
+        }
+        return decoded
+    }
+
+    private func persist(
+        _ settings: AppSettings,
+        to userDefaults: UserDefaults,
+        using storageKey: String,
+        encoder: JSONEncoder
+    ) {
+        guard let data = try? encoder.encode(settings) else { return }
+        userDefaults.set(data, forKey: storageKey)
+    }
+}
