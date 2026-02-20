@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -14,12 +15,14 @@ final class MenuBarController: NSObject {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let stopwatch: StopwatchService
     private let appSettingsStore: AppSettingsStore
+    private var cancellables = Set<AnyCancellable>()
 
     override init() {
         self.stopwatch = StopwatchService()
         self.appSettingsStore = AppSettingsStore()
         super.init()
         configurePopover()
+        bindSettings()
         configureStatusItem()
     }
 
@@ -29,13 +32,26 @@ final class MenuBarController: NSObject {
 
     private func configurePopover() {
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 540, height: 380)
+        let popoverSize = SessionPopoverView.popoverSize(showTimelineRing: appSettingsStore.showTimelineRing)
+        popover.contentSize = NSSize(width: popoverSize.width, height: popoverSize.height)
         popover.contentViewController = NSHostingController(
             rootView: SessionPopoverView(
                 stopwatch: stopwatch,
                 appSettingsStore: appSettingsStore
             )
         )
+    }
+
+    private func bindSettings() {
+        appSettingsStore.$settings
+            .map(\.showTimelineRing)
+            .removeDuplicates()
+            .sink { [weak self] showTimelineRing in
+                guard let self else { return }
+                let size = SessionPopoverView.popoverSize(showTimelineRing: showTimelineRing)
+                popover.contentSize = NSSize(width: size.width, height: size.height)
+            }
+            .store(in: &cancellables)
     }
 
     private func configureStatusItem() {

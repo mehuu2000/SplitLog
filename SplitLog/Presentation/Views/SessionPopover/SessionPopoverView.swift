@@ -36,6 +36,8 @@ struct SessionPopoverView: View {
         (255, 0, 128),
         (255, 0, 64),
     ]
+    private static let expandedPopoverSize = CGSize(width: 540, height: 380)
+    private static let compactPopoverSize = CGSize(width: 360, height: 330)
 
     @StateObject private var stopwatch: StopwatchService
     @StateObject private var appSettingsStore: AppSettingsStore
@@ -55,6 +57,8 @@ struct SessionPopoverView: View {
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
+    private let compactSessionTitleAreaWidth: CGFloat = 140
+    private let compactSessionTitleEditingAreaWidth: CGFloat = 140
     private let sessionTitleAreaHeight: CGFloat = 28
 
     init(stopwatch: StopwatchService, appSettingsStore: AppSettingsStore) {
@@ -72,8 +76,14 @@ struct SessionPopoverView: View {
         _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
     }
 
+    static func popoverSize(showTimelineRing: Bool) -> CGSize {
+        showTimelineRing ? expandedPopoverSize : compactPopoverSize
+    }
+
     var body: some View {
         let colorResolver = self.colorResolver
+        let showTimelineRing = appSettingsStore.showTimelineRing
+        let popoverSize = Self.popoverSize(showTimelineRing: showTimelineRing)
         let referenceDate = stopwatch.clock
         let timeline = timelineSlices(referenceDate: referenceDate)
         let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
@@ -81,13 +91,44 @@ struct SessionPopoverView: View {
             referenceDate: referenceDate,
             totalElapsedSeconds: totalElapsedSeconds
         )
+        let lapListView = SessionLapListView(
+            laps: stopwatch.laps,
+            selectedLapID: stopwatch.selectedLapID,
+            lapDisplayedSeconds: lapDisplayedSeconds,
+            subtitleText: subtitleText,
+            subtitleColor: colorResolver.subtitleTextColor,
+            rowPrimaryTextColor: colorResolver.lapPrimaryTextColor,
+            rowSecondaryIconColor: colorResolver.lapSecondaryIconColor,
+            inlineEditorBackgroundColor: colorResolver.inlineEditorBackgroundColor,
+            editingLapID: $editingLapID,
+            editingLapLabelDraft: $editingLapLabelDraft,
+            editingFocusToken: editingFocusToken,
+            formatDuration: { formatDuration(seconds: $0) },
+            colorForLap: { lapColor(for: $0) },
+            onSelectLap: { lapID in
+                handleSelectLap(lapID: lapID)
+            },
+            onOpenMemo: { lap in
+                beginLapMemoEdit(for: lap)
+            },
+            onBeginLapLabelEdit: { lap in
+                beginLapLabelEdit(for: lap)
+            },
+            onCommitLapLabelEdit: { lapID in
+                commitLapLabelEdit(lapID: lapID)
+            }
+        )
 
         ZStack {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Label("SplitLog", systemImage: "timer")
-                        .font(.headline)
-                    Spacer()
+                    if showTimelineRing {
+                        Label("SplitLog", systemImage: "timer")
+                            .font(.headline)
+                        Spacer()
+                    } else {
+                        Spacer(minLength: 0)
+                    }
 
                     HStack(spacing: 8) {
                         SessionSelectorCapsuleView(
@@ -132,105 +173,146 @@ struct SessionPopoverView: View {
                         .help("設定")
                         .accessibilityLabel("設定")
                     }
+
+                    if !showTimelineRing {
+                        Spacer(minLength: 0)
+                    }
                 }
 
                 Divider()
                     .padding(.top, -10)
 
                 HStack(spacing: 10) {
-                    if isEditingSelectedSessionTitle {
-                        sessionTitleEditingView
+                    if showTimelineRing {
+                        if isEditingSelectedSessionTitle {
+                            sessionTitleEditingView
+                        } else {
+                            sessionTitleDisplayView
+                        }
+
+                        Spacer()
+                        Text("全体経過")
+                            .foregroundStyle(colorResolver.subtitleTextColor)
+                        Text(formatDuration(seconds: totalElapsedSeconds))
+                            .monospacedDigit()
                     } else {
-                        sessionTitleDisplayView
+                        if isEditingSelectedSessionTitle {
+                            sessionTitleEditingView
+                        } else {
+                            sessionTitleDisplayView
+                        }
+
+                        Spacer(minLength: 8)
+
+                        HStack(spacing: 6) {
+                            Text("全体経過")
+                                .foregroundStyle(colorResolver.subtitleTextColor)
+                            Text(formatDuration(seconds: totalElapsedSeconds))
+                                .monospacedDigit()
+                        }
                     }
-
-                    Spacer()
-
-                    Text("全体経過")
-                        .foregroundStyle(colorResolver.subtitleTextColor)
-                    Text(formatDuration(seconds: totalElapsedSeconds))
-                        .monospacedDigit()
                 }
                 .font(.body)
+                .padding(.horizontal, showTimelineRing ? 0 : 24)
 
-                HStack(alignment: .top, spacing: 16) {
-                    SessionTimelineRingView(
-                        innerSlices: timeline.inner,
-                        outerSlices: timeline.outer,
-                        showOuterTrack: timeline.showOuterTrack,
-                        trackColor: colorResolver.timelineTrackColor,
-                        boundaryColor: colorResolver.timelineBorderColor,
-                        perimeterBorderColor: colorResolver.timelineBorderColor
-                    )
-                    .frame(width: 210, height: 210)
+                if showTimelineRing {
+                    HStack(alignment: .top, spacing: 16) {
+                        SessionTimelineRingView(
+                            innerSlices: timeline.inner,
+                            outerSlices: timeline.outer,
+                            showOuterTrack: timeline.showOuterTrack,
+                            trackColor: colorResolver.timelineTrackColor,
+                            boundaryColor: colorResolver.timelineBorderColor,
+                            perimeterBorderColor: colorResolver.timelineBorderColor
+                        )
+                        .frame(width: 210, height: 210)
 
-                    SessionLapListView(
-                        laps: stopwatch.laps,
-                        selectedLapID: stopwatch.selectedLapID,
-                        lapDisplayedSeconds: lapDisplayedSeconds,
-                        subtitleText: subtitleText,
-                        subtitleColor: colorResolver.subtitleTextColor,
-                        rowPrimaryTextColor: colorResolver.lapPrimaryTextColor,
-                        rowSecondaryIconColor: colorResolver.lapSecondaryIconColor,
-                        inlineEditorBackgroundColor: colorResolver.inlineEditorBackgroundColor,
-                        editingLapID: $editingLapID,
-                        editingLapLabelDraft: $editingLapLabelDraft,
-                        editingFocusToken: editingFocusToken,
-                        formatDuration: { formatDuration(seconds: $0) },
-                        colorForLap: { lapColor(for: $0) },
-                        onSelectLap: { lapID in
-                            handleSelectLap(lapID: lapID)
-                        },
-                        onOpenMemo: { lap in
-                            beginLapMemoEdit(for: lap)
-                        },
-                        onBeginLapLabelEdit: { lap in
-                            beginLapLabelEdit(for: lap)
-                        },
-                        onCommitLapLabelEdit: { lapID in
-                            commitLapLabelEdit(lapID: lapID)
-                        }
-                    )
+                        lapListView
+                    }
+                } else {
+                    HStack {
+                        lapListView
+                            .frame(width: 290, alignment: .center)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
 
                 Spacer(minLength: 8)
 
-                HStack {
+                if showTimelineRing {
+                    HStack {
+                        HStack(spacing: 10) {
+                            Button(primaryActionButtonTitle, action: handlePrimaryAction)
+                                .buttonStyle(.borderedProminent)
+
+                            Button("ラップ終了", action: handleFinishLap)
+                                .buttonStyle(.bordered)
+                                .disabled(stopwatch.state != .running)
+                        }
+                        .tint(colorResolver.controlTint)
+
+                        Spacer()
+
+                        Button(action: requestReset) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .frame(width: 14, height: 14)
+                        }
+                        .frame(width: 32, height: 32)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 8))
+                        .tint(colorResolver.utilityButtonTint)
+                        .help("リセット")
+                        .accessibilityLabel("リセット")
+                        .disabled(stopwatch.session == nil)
+
+                        Button(action: requestDeleteSession) {
+                            Image(systemName: "trash")
+                                .frame(width: 14, height: 14)
+                        }
+                        .frame(width: 32, height: 32)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 8))
+                        .tint(colorResolver.utilityButtonTint)
+                        .help("現在セッションを削除")
+                        .accessibilityLabel("現在セッションを削除")
+                        .disabled(stopwatch.session == nil)
+                    }
+                } else {
                     HStack(spacing: 10) {
                         Button(primaryActionButtonTitle, action: handlePrimaryAction)
                             .buttonStyle(.borderedProminent)
+                            .tint(colorResolver.controlTint)
 
                         Button("ラップ終了", action: handleFinishLap)
                             .buttonStyle(.bordered)
+                            .tint(colorResolver.controlTint)
                             .disabled(stopwatch.state != .running)
-                    }
-                    .tint(colorResolver.controlTint)
 
-                    Spacer()
+                        Button(action: requestReset) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .frame(width: 14, height: 14)
+                        }
+                        .frame(width: 32, height: 32)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 8))
+                        .tint(colorResolver.utilityButtonTint)
+                        .help("リセット")
+                        .accessibilityLabel("リセット")
+                        .disabled(stopwatch.session == nil)
 
-                    Button(action: requestReset) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .frame(width: 14, height: 14)
+                        Button(action: requestDeleteSession) {
+                            Image(systemName: "trash")
+                                .frame(width: 14, height: 14)
+                        }
+                        .frame(width: 32, height: 32)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 8))
+                        .tint(colorResolver.utilityButtonTint)
+                        .help("現在セッションを削除")
+                        .accessibilityLabel("現在セッションを削除")
+                        .disabled(stopwatch.session == nil)
                     }
-                    .frame(width: 32, height: 32)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 8))
-                    .tint(colorResolver.utilityButtonTint)
-                    .help("リセット")
-                    .accessibilityLabel("リセット")
-                    .disabled(stopwatch.session == nil)
-
-                    Button(action: requestDeleteSession) {
-                        Image(systemName: "trash")
-                            .frame(width: 14, height: 14)
-                    }
-                    .frame(width: 32, height: 32)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.roundedRectangle(radius: 8))
-                    .tint(colorResolver.utilityButtonTint)
-                    .help("現在セッションを削除")
-                    .accessibilityLabel("現在セッションを削除")
-                    .disabled(stopwatch.session == nil)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
 
@@ -307,7 +389,7 @@ struct SessionPopoverView: View {
             }
         }
         .padding(14)
-        .frame(width: 540, height: 380)
+        .frame(width: popoverSize.width, height: popoverSize.height)
         .tint(colorResolver.controlTint)
         .background(.regularMaterial)
         .onAppear {
@@ -343,7 +425,10 @@ struct SessionPopoverView: View {
         return editingSessionID == selectedSessionID
     }
 
+    @ViewBuilder
     private var sessionTitleDisplayView: some View {
+        let width = appSettingsStore.showTimelineRing ? sessionTitleAreaWidth : compactSessionTitleAreaWidth
+
         ScrollView(.horizontal, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(selectedSessionTitleText)
@@ -358,13 +443,16 @@ struct SessionPopoverView: View {
                     .frame(height: 1)
             }
         }
-        .frame(width: sessionTitleAreaWidth, height: sessionTitleAreaHeight, alignment: .leading)
+        .frame(width: width, height: sessionTitleAreaHeight, alignment: .leading)
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture(perform: beginSessionTitleEdit)
     }
 
+    @ViewBuilder
     private var sessionTitleEditingView: some View {
+        let width = appSettingsStore.showTimelineRing ? sessionTitleAreaWidth : compactSessionTitleEditingAreaWidth
+
         VStack(alignment: .leading, spacing: 2) {
             InlineLapLabelEditor(
                 text: $editingSessionTitleDraft,
@@ -385,7 +473,7 @@ struct SessionPopoverView: View {
                 .frame(width: sessionTitleUnderlineWidth)
                 .frame(height: 1)
         }
-        .frame(width: sessionTitleAreaWidth, height: sessionTitleAreaHeight, alignment: .leading)
+        .frame(width: width, height: sessionTitleAreaHeight, alignment: .leading)
         .clipped()
     }
 
