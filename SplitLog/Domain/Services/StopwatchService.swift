@@ -443,7 +443,7 @@ final class StopwatchService: ObservableObject {
 
     private func makeIdleSessionContext(at date: Date) -> SessionContext {
         let sessionID = UUID()
-        let sessionTitle = defaultSessionTitle(for: nextSessionNumber)
+        let sessionTitle = defaultSessionTitle(at: date)
         nextSessionNumber += 1
 
         let session = WorkSession(
@@ -510,8 +510,80 @@ final class StopwatchService: ObservableObject {
         "作業\(index)"
     }
 
-    private func defaultSessionTitle(for number: Int) -> String {
-        "セッション\(number)"
+    private func defaultSessionTitle(at date: Date) -> String {
+        let baseTitle = sessionDateTitlePrefix(for: date)
+        let sameDateTitles = sessionOrder
+            .compactMap { sessionContexts[$0]?.session.title }
+            .filter { isSameDateSessionTitle($0, baseTitle: baseTitle) }
+
+        guard !sameDateTitles.isEmpty else {
+            return baseTitle
+        }
+
+        var usedSuffixIndexes: Set<Int> = []
+        for title in sameDateTitles {
+            guard title != baseTitle else { continue }
+            let suffix = String(title.dropFirst(baseTitle.count + 1))
+            if let index = sessionTitleSuffixIndex(from: suffix) {
+                usedSuffixIndexes.insert(index)
+            }
+        }
+
+        var nextSuffixIndex = 1
+        while usedSuffixIndexes.contains(nextSuffixIndex) {
+            nextSuffixIndex += 1
+        }
+
+        return "\(baseTitle)-\(sessionTitleSuffix(for: nextSuffixIndex))"
+    }
+
+    private func sessionDateTitlePrefix(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let day = components.day ?? 0
+        return "\(year)/\(month)/\(day)"
+    }
+
+    private func isSameDateSessionTitle(_ title: String, baseTitle: String) -> Bool {
+        if title == baseTitle {
+            return true
+        }
+
+        guard title.hasPrefix(baseTitle + "-") else {
+            return false
+        }
+
+        let suffix = String(title.dropFirst(baseTitle.count + 1))
+        return sessionTitleSuffixIndex(from: suffix) != nil
+    }
+
+    private func sessionTitleSuffix(for index: Int) -> String {
+        guard index > 0 else { return "A" }
+
+        var value = index
+        var suffixScalars: [UnicodeScalar] = []
+        while value > 0 {
+            let zeroBased = (value - 1) % 26
+            suffixScalars.append(UnicodeScalar(65 + zeroBased)!)
+            value = (value - 1) / 26
+        }
+
+        return String(String.UnicodeScalarView(suffixScalars.reversed()))
+    }
+
+    private func sessionTitleSuffixIndex(from suffix: String) -> Int? {
+        guard !suffix.isEmpty else { return nil }
+
+        var result = 0
+        for scalar in suffix.uppercased().unicodeScalars {
+            guard scalar.value >= 65 && scalar.value <= 90 else {
+                return nil
+            }
+            result = (result * 26) + Int(scalar.value - 64)
+        }
+
+        return result > 0 ? result : nil
     }
 
     private func accumulateActiveDuration(in context: inout SessionContext, until date: Date) {

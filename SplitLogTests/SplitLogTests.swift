@@ -26,6 +26,13 @@ private final class InMemorySessionStore: @unchecked Sendable, SessionStore {
 }
 
 struct SplitLogTests {
+    private func expectedSessionTitlePrefix(for date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let day = components.day ?? 0
+        return "\(year)/\(month)/\(day)"
+    }
 
     @MainActor
     @Test func startSession_startsRunningStateWithFirstLap() {
@@ -129,6 +136,31 @@ struct SplitLogTests {
             #expect(service.sessionState(for: secondID) == .idle)
             #expect(service.elapsedSession(for: secondID, at: t3) == 0)
         }
+    }
+
+    @MainActor
+    @Test func addSession_usesDateBasedDefaultTitleAndSuffixesOnlyWhenDuplicated() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let calendar = Calendar.current
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = t0.addingTimeInterval(60)
+        let t2 = t0.addingTimeInterval(120)
+        let nextDay = calendar.date(byAdding: .day, value: 1, to: t0) ?? t0.addingTimeInterval(86_400)
+
+        let day0Prefix = expectedSessionTitlePrefix(for: t0)
+        let day1Prefix = expectedSessionTitlePrefix(for: nextDay)
+
+        service.addSession(at: t0)
+        #expect(service.session?.title == day0Prefix)
+
+        service.addSession(at: t1)
+        #expect(service.session?.title == "\(day0Prefix)-A")
+
+        service.addSession(at: t2)
+        #expect(service.session?.title == "\(day0Prefix)-B")
+
+        service.addSession(at: nextDay)
+        #expect(service.session?.title == day1Prefix)
     }
 
     @MainActor
