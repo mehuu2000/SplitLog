@@ -105,6 +105,7 @@ struct SessionPopoverView: View {
                 }
 
                 Divider()
+                    .padding(.top, -10)
 
                 HStack(spacing: 10) {
                     if isEditingSelectedSessionTitle {
