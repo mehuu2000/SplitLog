@@ -111,6 +111,25 @@ struct SessionSettingsOverlayView: View {
                                     }
                                 )
                             )
+
+                            HStack {
+                                Text("リング周期（1周）")
+                                Spacer()
+                                Stepper(
+                                    value: Binding(
+                                        get: { settingsStore.timelineRingHoursPerCycle },
+                                        set: { newValue in
+                                            settingsStore.setTimelineRingHoursPerCycle(newValue)
+                                        }
+                                    ),
+                                    in: 1 ... 24,
+                                    step: 1
+                                ) {
+                                    Text("\(settingsStore.timelineRingHoursPerCycle)時間")
+                                        .monospacedDigit()
+                                }
+                                .fixedSize()
+                            }
                         }
 
                         VStack(alignment: .leading, spacing: 8) {

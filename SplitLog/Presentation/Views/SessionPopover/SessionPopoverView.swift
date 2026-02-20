@@ -89,7 +89,6 @@ struct SessionPopoverView: View {
     @State private var sessionTitleUnderlineMeasurementCache = SessionTitleUnderlineMeasurement(text: "", fontSize: 0)
     @State private var lapSecondsCacheKey: LapSecondsComputationKey?
     @State private var lapSecondsCacheValue: [UUID: Int] = [:]
-    private let ringBlockDuration: TimeInterval = 3 * 60 * 60
     private let sessionTitleAreaWidth: CGFloat = 250
     private let compactSessionTitleAreaWidth: CGFloat = 140
     private let compactSessionTitleEditingAreaWidth: CGFloat = 140
@@ -532,6 +531,10 @@ struct SessionPopoverView: View {
     private var memoEditingLap: WorkLap? {
         guard let memoEditingLapID else { return nil }
         return stopwatch.laps.first(where: { $0.id == memoEditingLapID })
+    }
+
+    private var ringBlockDuration: TimeInterval {
+        TimeInterval(max(1, appSettingsStore.timelineRingHoursPerCycle)) * 60 * 60
     }
 
     private var selectedSessionTitleText: String {

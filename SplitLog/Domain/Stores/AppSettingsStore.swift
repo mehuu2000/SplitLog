@@ -43,6 +43,10 @@ final class AppSettingsStore: ObservableObject {
         settings.showTimelineRing
     }
 
+    var timelineRingHoursPerCycle: Int {
+        settings.timelineRingHoursPerCycle
+    }
+
     var summaryTimeFormat: SummaryTimeFormat {
         settings.summaryTimeFormat
     }
@@ -59,6 +63,12 @@ final class AppSettingsStore: ObservableObject {
     func setShowTimelineRing(_ isVisible: Bool) {
         guard settings.showTimelineRing != isVisible else { return }
         settings.showTimelineRing = isVisible
+    }
+
+    func setTimelineRingHoursPerCycle(_ hours: Int) {
+        let normalizedHours = max(1, min(24, hours))
+        guard settings.timelineRingHoursPerCycle != normalizedHours else { return }
+        settings.timelineRingHoursPerCycle = normalizedHours
     }
 
     func setSummaryTimeFormat(_ format: SummaryTimeFormat) {
