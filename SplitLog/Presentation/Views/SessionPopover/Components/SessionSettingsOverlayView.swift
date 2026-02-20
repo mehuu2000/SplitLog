@@ -85,9 +85,7 @@ struct SessionSettingsOverlayView: View {
                                 selection: Binding(
                                     get: { settingsStore.themeMode },
                                     set: { newValue in
-                                        Task { @MainActor in
-                                            settingsStore.setThemeMode(newValue)
-                                        }
+                                        settingsStore.setThemeMode(newValue)
                                     }
                                 )
                             ) {
@@ -109,9 +107,7 @@ struct SessionSettingsOverlayView: View {
                                 isOn: Binding(
                                     get: { settingsStore.showTimelineRing },
                                     set: { isVisible in
-                                        Task { @MainActor in
-                                            settingsStore.setShowTimelineRing(isVisible)
-                                        }
+                                        settingsStore.setShowTimelineRing(isVisible)
                                     }
                                 )
                             )
@@ -130,9 +126,7 @@ struct SessionSettingsOverlayView: View {
                                     selection: Binding(
                                         get: { settingsStore.summaryMemoFormat },
                                         set: { newValue in
-                                            Task { @MainActor in
-                                                settingsStore.setSummaryMemoFormat(newValue)
-                                            }
+                                            settingsStore.setSummaryMemoFormat(newValue)
                                         }
                                     )
                                 ) {
@@ -153,9 +147,7 @@ struct SessionSettingsOverlayView: View {
                                     selection: Binding(
                                         get: { settingsStore.summaryTimeFormat },
                                         set: { newValue in
-                                            Task { @MainActor in
-                                                settingsStore.setSummaryTimeFormat(newValue)
-                                            }
+                                            settingsStore.setSummaryTimeFormat(newValue)
                                         }
                                     )
                                 ) {
