@@ -10,6 +10,11 @@ import SwiftUI
 
 @MainActor
 struct SessionPopoverView: View {
+    private enum SessionSummaryTimeFormat {
+        case decimalHours
+        case hourMinute
+    }
+
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -56,6 +61,7 @@ struct SessionPopoverView: View {
     @State private var memoLapLabelDraft = ""
     @State private var memoLapTextDraft = ""
     @State private var sessionSummaryDraft = ""
+    @State private var sessionSummaryTimeFormat: SessionSummaryTimeFormat = .decimalHours
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -384,6 +390,13 @@ struct SessionPopoverView: View {
             if isShowingSessionSummaryModal {
                 SessionSummaryOverlayView(
                     summaryText: $sessionSummaryDraft,
+                    timeFormatLabel: sessionSummaryTimeFormatButtonText(referenceDate: referenceDate),
+                    onToggleTimeFormat: {
+                        toggleSessionSummaryTimeFormat(
+                            lapDisplayedSeconds: lapDisplayedSeconds,
+                            totalElapsedSeconds: totalElapsedSeconds
+                        )
+                    },
                     onCopy: copySessionSummaryToPasteboard,
                     onClose: {
                         isShowingSessionSummaryModal = false
@@ -528,6 +541,20 @@ struct SessionPopoverView: View {
     private var subtitleText: String {
         guard !stopwatch.laps.isEmpty else { return "" }
         return stopwatchStateText
+    }
+
+    private func sessionSummaryTimeFormatButtonText(referenceDate: Date) -> String {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: referenceDate)
+        let hour = max(0, components.hour ?? 0)
+        let minute = max(0, components.minute ?? 0)
+
+        switch sessionSummaryTimeFormat {
+        case .decimalHours:
+            let decimalHours = Double(hour) + (Double(minute) / 60.0)
+            return String(format: "%.1fh", decimalHours)
+        case .hourMinute:
+            return "\(hour)時間\(minute)分"
+        }
     }
 
     private var colorResolver: SessionThemeColorResolver {
@@ -677,11 +704,25 @@ struct SessionPopoverView: View {
     ) {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
+        sessionSummaryTimeFormat = .decimalHours
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
-            totalElapsedSeconds: totalElapsedSeconds
+            totalElapsedSeconds: totalElapsedSeconds,
+            timeFormat: sessionSummaryTimeFormat
         )
         isShowingSessionSummaryModal = true
+    }
+
+    private func toggleSessionSummaryTimeFormat(
+        lapDisplayedSeconds: [UUID: Int],
+        totalElapsedSeconds: Int
+    ) {
+        sessionSummaryTimeFormat = (sessionSummaryTimeFormat == .decimalHours) ? .hourMinute : .decimalHours
+        sessionSummaryDraft = buildSessionSummaryText(
+            lapDisplayedSeconds: lapDisplayedSeconds,
+            totalElapsedSeconds: totalElapsedSeconds,
+            timeFormat: sessionSummaryTimeFormat
+        )
     }
 
     private func copySessionSummaryToPasteboard() {
@@ -692,12 +733,13 @@ struct SessionPopoverView: View {
 
     private func buildSessionSummaryText(
         lapDisplayedSeconds: [UUID: Int],
-        totalElapsedSeconds: Int
+        totalElapsedSeconds: Int,
+        timeFormat: SessionSummaryTimeFormat
     ) -> String {
         guard let session = stopwatch.session else { return "" }
 
         var lines: [String] = []
-        lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds)))】")
+        lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds, format: timeFormat)))】")
 
         if stopwatch.laps.isEmpty {
             lines.append("・ラップはまだありません")
@@ -706,7 +748,7 @@ struct SessionPopoverView: View {
 
         for lap in stopwatch.laps {
             let elapsedSeconds = lapDisplayedSeconds[lap.id] ?? durationSeconds(stopwatch.elapsedLap(lap))
-            lines.append("・\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds)))")
+            lines.append("・\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds, format: timeFormat)))")
             let trimmedMemo = lap.memo.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedMemo.isEmpty {
                 lines.append(lap.memo)
@@ -716,11 +758,17 @@ struct SessionPopoverView: View {
         return lines.joined(separator: "\n")
     }
 
-    private func summaryDurationText(seconds: Int) -> String {
-        let roundedTotalMinutes = max(0, (seconds + 30) / 60)
-        let hours = roundedTotalMinutes / 60
-        let minutes = roundedTotalMinutes % 60
-        return "\(hours)時間\(minutes)分"
+    private func summaryDurationText(seconds: Int, format: SessionSummaryTimeFormat) -> String {
+        switch format {
+        case .decimalHours:
+            let roundedHours = max(0, Double(seconds) / 3600)
+            return String(format: "%.1fh", roundedHours)
+        case .hourMinute:
+            let roundedTotalMinutes = max(0, (seconds + 30) / 60)
+            let hours = roundedTotalMinutes / 60
+            let minutes = roundedTotalMinutes % 60
+            return "\(hours)時間\(minutes)分"
+        }
     }
 
     private func commitLapMemoEdit() {
