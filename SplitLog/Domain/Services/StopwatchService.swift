@@ -271,6 +271,31 @@ final class StopwatchService: ObservableObject {
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
+    func clearAllLapsAndMemos(at date: Date = Date()) {
+        guard !sessionOrder.isEmpty else { return }
+
+        for sessionID in sessionOrder {
+            guard var context = sessionContexts[sessionID] else { continue }
+            context.state = .idle
+            context.session.startedAt = date
+            context.session.endedAt = nil
+            context.laps = []
+            context.selectedLapID = nil
+            context.pauseStartedAt = nil
+            context.lastLapActivationAt = nil
+            context.completedPauseIntervals = []
+            sessionContexts[sessionID] = context
+        }
+
+        if let selectedSessionID, sessionContexts[selectedSessionID] == nil {
+            self.selectedSessionID = sessionOrder.first
+        } else if selectedSessionID == nil {
+            self.selectedSessionID = sessionOrder.first
+        }
+
+        commitSelectionUpdate(at: date)
+    }
+
     func deleteSelectedSession(at date: Date = Date()) {
         guard let selectedSessionID else { return }
         guard let removedIndex = sessionOrder.firstIndex(of: selectedSessionID) else { return }

@@ -408,6 +408,10 @@ struct SessionPopoverView: View {
             if isShowingSettingsModal {
                 SessionSettingsOverlayView(
                     settingsStore: appSettingsStore,
+                    onDeleteSessionData: handleDeleteAllSessionData,
+                    onDeleteLapData: handleDeleteAllLapData,
+                    onResetSettings: handleResetAllSettings,
+                    onInitializeAllData: handleInitializeAllData,
                     onClose: {
                         isShowingSettingsModal = false
                     }
@@ -651,6 +655,29 @@ struct SessionPopoverView: View {
     private func handleDeleteSession() {
         commitPendingInlineEdits()
         stopwatch.deleteSelectedSession()
+    }
+
+    private func handleDeleteAllSessionData() {
+        commitPendingInlineEdits()
+        commitActiveLapMemoEditIfNeeded()
+        stopwatch.resetToIdle()
+    }
+
+    private func handleDeleteAllLapData() {
+        commitPendingInlineEdits()
+        commitActiveLapMemoEditIfNeeded()
+        stopwatch.clearAllLapsAndMemos()
+    }
+
+    private func handleResetAllSettings() {
+        appSettingsStore.resetToDefaults()
+    }
+
+    private func handleInitializeAllData() {
+        commitPendingInlineEdits()
+        commitActiveLapMemoEditIfNeeded()
+        stopwatch.resetToIdle()
+        appSettingsStore.resetToDefaults()
     }
 
     private func beginLapLabelEdit(for lap: WorkLap) {

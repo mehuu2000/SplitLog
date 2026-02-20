@@ -70,6 +70,10 @@ final class AppSettingsStore: ObservableObject {
         self.settings = settings
     }
 
+    func resetToDefaults() {
+        update(.default)
+    }
+
     private func persistIfNeeded() {
         guard canPersist else { return }
         persist(settings, to: userDefaults, using: storageKey, encoder: encoder)
