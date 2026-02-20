@@ -5,6 +5,7 @@
 //  Created by 濱田真仁 on 2026/02/17.
 //
 
+import AppKit
 import SwiftUI
 
 @MainActor
@@ -104,28 +105,35 @@ struct SessionPopoverView: View {
                 Divider()
 
                 HStack(spacing: 10) {
-                    if isEditingSelectedSessionTitle {
-                        InlineLapLabelEditor(
-                            text: $editingSessionTitleDraft,
-                            focusToken: editingSessionTitleFocusToken,
-                            fontSize: 14,
-                            fontWeight: .semibold,
-                            onCommit: commitSessionTitleEdit
-                        )
-                        .frame(minWidth: 120, maxWidth: 230, alignment: .leading)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.9))
-                        )
-                    } else {
-                        Text(selectedSessionTitleText)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(stopwatch.session == nil ? .secondary : .primary)
-                            .contentShape(Rectangle())
-                            .onTapGesture(perform: beginSessionTitleEdit)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if isEditingSelectedSessionTitle {
+                            InlineLapLabelEditor(
+                                text: $editingSessionTitleDraft,
+                                focusToken: editingSessionTitleFocusToken,
+                                fontSize: 14,
+                                fontWeight: .semibold,
+                                onCommit: commitSessionTitleEdit
+                            )
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white.opacity(0.9))
+                            )
+                        } else {
+                            Text(selectedSessionTitleText)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(stopwatch.session == nil ? .secondary : .primary)
+                                .contentShape(Rectangle())
+                                .onTapGesture(perform: beginSessionTitleEdit)
+                        }
+
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.22))
+                            .frame(width: sessionTitleUnderlineWidth)
+                            .frame(height: 1)
                     }
+                    .frame(maxWidth: 230, alignment: .leading)
 
                     Spacer()
 
@@ -286,6 +294,15 @@ struct SessionPopoverView: View {
 
     private var selectedSessionTitleText: String {
         stopwatch.session?.title ?? "セッション未選択"
+    }
+
+    private var sessionTitleUnderlineWidth: CGFloat {
+        let baseText = isEditingSelectedSessionTitle ? editingSessionTitleDraft : selectedSessionTitleText
+        let text = baseText.isEmpty ? " " : baseText
+        let fontSize: CGFloat = isEditingSelectedSessionTitle ? 14 : 16
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let measuredWidth = (text as NSString).size(withAttributes: [.font: font]).width
+        return min(230, max(32, ceil(measuredWidth) + 4))
     }
 
     private var isEditingSelectedSessionTitle: Bool {
