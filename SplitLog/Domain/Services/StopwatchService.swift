@@ -313,6 +313,21 @@ final class StopwatchService: ObservableObject {
         persistState()
     }
 
+    func updateLapMemo(lapID: UUID, memo: String) {
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            let index = context.laps.firstIndex(where: { $0.id == lapID })
+        else {
+            return
+        }
+
+        context.laps[index].memo = memo
+        sessionContexts[selectedSessionID] = context
+        applySelectedContext()
+        persistState()
+    }
+
     func setDisplayActive(_ isActive: Bool) {
         guard isDisplayActive != isActive else { return }
         isDisplayActive = isActive

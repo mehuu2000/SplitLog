@@ -18,6 +18,7 @@ struct SessionLapListView: View {
     let formatDuration: (Int) -> String
     let colorForLap: (Int) -> Color
     let onSelectLap: (UUID) -> Void
+    let onOpenMemo: (WorkLap) -> Void
     let onBeginLapLabelEdit: (WorkLap) -> Void
     let onCommitLapLabelEdit: (UUID) -> Void
 
@@ -48,6 +49,9 @@ struct SessionLapListView: View {
                                     color: colorForLap(lap.index),
                                     onSelectLap: {
                                         onSelectLap(lap.id)
+                                    },
+                                    onOpenMemo: {
+                                        onOpenMemo(lap)
                                     },
                                     onBeginEdit: {
                                         onBeginLapLabelEdit(lap)
@@ -92,6 +96,7 @@ private struct SessionLapRowView: View {
     let formatDuration: (Int) -> String
     let color: Color
     let onSelectLap: () -> Void
+    let onOpenMemo: () -> Void
     let onBeginEdit: () -> Void
     let onCommitEdit: () -> Void
 
@@ -130,6 +135,17 @@ private struct SessionLapRowView: View {
                 }
 
                 Spacer()
+
+                Button(action: onOpenMemo) {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.black.opacity(0.8))
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+
                 Text(formatDuration(displayedSeconds))
                     .monospacedDigit()
                     .foregroundStyle(Color.black)

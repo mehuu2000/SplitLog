@@ -43,6 +43,9 @@ struct SessionPopoverView: View {
     @State private var isShowingResetConfirmation = false
     @State private var isShowingDeleteSessionConfirmation = false
     @State private var isShowingSessionOverflowList = false
+    @State private var memoEditingLapID: UUID?
+    @State private var memoLapLabelDraft = ""
+    @State private var memoLapTextDraft = ""
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
 
@@ -122,6 +125,9 @@ struct SessionPopoverView: View {
                         colorForLap: { lapColor(for: $0) },
                         onSelectLap: { lapID in
                             handleSelectLap(lapID: lapID)
+                        },
+                        onOpenMemo: { lap in
+                            beginLapMemoEdit(for: lap)
                         },
                         onBeginLapLabelEdit: { lap in
                             beginLapLabelEdit(for: lap)
@@ -219,6 +225,15 @@ struct SessionPopoverView: View {
                     }
                 )
             }
+
+            if let memoLap = memoEditingLap {
+                SessionLapMemoOverlayView(
+                    lapLabel: $memoLapLabelDraft,
+                    elapsedText: formatDuration(seconds: lapDisplayedSeconds[memoLap.id] ?? 0),
+                    memoText: $memoLapTextDraft,
+                    onClose: commitLapMemoEdit
+                )
+            }
         }
         .padding(14)
         .frame(width: 540, height: 380)
@@ -228,8 +243,14 @@ struct SessionPopoverView: View {
         }
         .onDisappear {
             commitActiveLapLabelEditIfNeeded()
+            commitActiveLapMemoEditIfNeeded()
             stopwatch.setDisplayActive(false)
         }
+    }
+
+    private var memoEditingLap: WorkLap? {
+        guard let memoEditingLapID else { return nil }
+        return stopwatch.laps.first(where: { $0.id == memoEditingLapID })
     }
 
     private var subtitleText: String {
@@ -340,6 +361,28 @@ struct SessionPopoverView: View {
     private func commitActiveLapLabelEditIfNeeded() {
         guard let lapID = editingLapID else { return }
         commitLapLabelEdit(lapID: lapID)
+    }
+
+    private func beginLapMemoEdit(for lap: WorkLap) {
+        commitActiveLapLabelEditIfNeeded()
+        memoEditingLapID = lap.id
+        memoLapLabelDraft = lap.label
+        memoLapTextDraft = lap.memo
+    }
+
+    private func commitLapMemoEdit() {
+        guard let lapID = memoEditingLapID else { return }
+        stopwatch.updateLapLabel(lapID: lapID, label: memoLapLabelDraft)
+        stopwatch.updateLapMemo(lapID: lapID, memo: memoLapTextDraft)
+
+        memoEditingLapID = nil
+        memoLapLabelDraft = ""
+        memoLapTextDraft = ""
+    }
+
+    private func commitActiveLapMemoEditIfNeeded() {
+        guard memoEditingLapID != nil else { return }
+        commitLapMemoEdit()
     }
 
     private func timelineSlices(referenceDate: Date) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {

@@ -484,6 +484,21 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func updateLapMemo_persistsAndRestoresMemoText() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let memo = "次回はここから再開"
+
+        let source = StopwatchService(autoTick: false, sessionStore: store)
+        source.startSession(at: t0)
+        let lapID = try #require(source.currentLap?.id)
+        source.updateLapMemo(lapID: lapID, memo: memo)
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+        #expect(restored.currentLap?.memo == memo)
+    }
+
+    @MainActor
     @Test func restore_duplicateSessionOrder_isDeduplicatedKeepingFirstSeenOrder() {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
