@@ -9,6 +9,8 @@ import SwiftUI
 
 struct SessionSummaryOverlayView: View {
     @Binding var summaryText: String
+    let memoFormatLabel: String
+    let onToggleMemoFormat: () -> Void
     let timeFormatLabel: String
     let onToggleTimeFormat: () -> Void
     let onCopy: () -> Void
@@ -24,6 +26,25 @@ struct SessionSummaryOverlayView: View {
                 HStack {
                     Text("セッションまとめ")
                         .font(.headline)
+
+                    Button(action: onToggleMemoFormat) {
+                        Text(memoFormatLabel)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color.accentColor.opacity(0.95))
+                            .padding(.horizontal, 4)
+                            .frame(height: 20)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.accentColor.opacity(0.18))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.accentColor.opacity(0.45), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("メモ表示形式を切り替え")
+                    .accessibilityLabel("メモ表示形式を切り替え")
 
                     Button(action: onToggleTimeFormat) {
                         Text(timeFormatLabel)

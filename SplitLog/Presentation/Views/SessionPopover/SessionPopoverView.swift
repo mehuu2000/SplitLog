@@ -15,6 +15,11 @@ struct SessionPopoverView: View {
         case hourMinute
     }
 
+    private enum SessionSummaryMemoFormat {
+        case bulleted
+        case plain
+    }
+
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -62,6 +67,7 @@ struct SessionPopoverView: View {
     @State private var memoLapTextDraft = ""
     @State private var sessionSummaryDraft = ""
     @State private var sessionSummaryTimeFormat: SessionSummaryTimeFormat = .decimalHours
+    @State private var sessionSummaryMemoFormat: SessionSummaryMemoFormat = .bulleted
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -390,6 +396,13 @@ struct SessionPopoverView: View {
             if isShowingSessionSummaryModal {
                 SessionSummaryOverlayView(
                     summaryText: $sessionSummaryDraft,
+                    memoFormatLabel: sessionSummaryMemoFormatLabel,
+                    onToggleMemoFormat: {
+                        toggleSessionSummaryMemoFormat(
+                            lapDisplayedSeconds: lapDisplayedSeconds,
+                            totalElapsedSeconds: totalElapsedSeconds
+                        )
+                    },
                     timeFormatLabel: sessionSummaryTimeFormatButtonText(referenceDate: referenceDate),
                     onToggleTimeFormat: {
                         toggleSessionSummaryTimeFormat(
@@ -557,6 +570,15 @@ struct SessionPopoverView: View {
         }
     }
 
+    private var sessionSummaryMemoFormatLabel: String {
+        switch sessionSummaryMemoFormat {
+        case .bulleted:
+            "- メモ"
+        case .plain:
+            "メモ"
+        }
+    }
+
     private var colorResolver: SessionThemeColorResolver {
         SessionThemeColorResolver(mode: appSettingsStore.themeMode)
     }
@@ -705,10 +727,12 @@ struct SessionPopoverView: View {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
         sessionSummaryTimeFormat = .decimalHours
+        sessionSummaryMemoFormat = .bulleted
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
             totalElapsedSeconds: totalElapsedSeconds,
-            timeFormat: sessionSummaryTimeFormat
+            timeFormat: sessionSummaryTimeFormat,
+            memoFormat: sessionSummaryMemoFormat
         )
         isShowingSessionSummaryModal = true
     }
@@ -721,7 +745,21 @@ struct SessionPopoverView: View {
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
             totalElapsedSeconds: totalElapsedSeconds,
-            timeFormat: sessionSummaryTimeFormat
+            timeFormat: sessionSummaryTimeFormat,
+            memoFormat: sessionSummaryMemoFormat
+        )
+    }
+
+    private func toggleSessionSummaryMemoFormat(
+        lapDisplayedSeconds: [UUID: Int],
+        totalElapsedSeconds: Int
+    ) {
+        sessionSummaryMemoFormat = (sessionSummaryMemoFormat == .bulleted) ? .plain : .bulleted
+        sessionSummaryDraft = buildSessionSummaryText(
+            lapDisplayedSeconds: lapDisplayedSeconds,
+            totalElapsedSeconds: totalElapsedSeconds,
+            timeFormat: sessionSummaryTimeFormat,
+            memoFormat: sessionSummaryMemoFormat
         )
     }
 
@@ -734,7 +772,8 @@ struct SessionPopoverView: View {
     private func buildSessionSummaryText(
         lapDisplayedSeconds: [UUID: Int],
         totalElapsedSeconds: Int,
-        timeFormat: SessionSummaryTimeFormat
+        timeFormat: SessionSummaryTimeFormat,
+        memoFormat: SessionSummaryMemoFormat
     ) -> String {
         guard let session = stopwatch.session else { return "" }
 
@@ -751,7 +790,18 @@ struct SessionPopoverView: View {
             lines.append("・\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds, format: timeFormat)))")
             let trimmedMemo = lap.memo.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedMemo.isEmpty {
-                lines.append(lap.memo)
+                switch memoFormat {
+                case .plain:
+                    lines.append(lap.memo)
+                case .bulleted:
+                    let paragraphs = lap.memo
+                        .components(separatedBy: .newlines)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    for paragraph in paragraphs {
+                        lines.append("- \(paragraph)")
+                    }
+                }
             }
         }
 
