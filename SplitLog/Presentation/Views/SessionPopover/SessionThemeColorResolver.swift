@@ -81,7 +81,7 @@ struct SessionThemeColorResolver {
     }
 
     var timelineTrackColor: Color {
-        isMonochrome ? Color.primary.opacity(0.18) : Color.primary.opacity(0.1)
+        isMonochrome ? Color(white: 0.94) : Color.primary.opacity(0.1)
     }
 
     var timelineBorderColor: Color {
