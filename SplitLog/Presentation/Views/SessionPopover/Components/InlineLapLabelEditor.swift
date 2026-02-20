@@ -32,10 +32,16 @@ struct InlineLapLabelEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: InlineLapLabelEditor
         weak var textField: NSTextField?
+        private var outsideClickMonitor: Any?
         private var activeFocusRequestToken: Int = -1
+        private var isOutsideCommitEnabled = false
 
         init(parent: InlineLapLabelEditor) {
             self.parent = parent
+        }
+
+        deinit {
+            removeOutsideClickMonitor()
         }
 
         func controlTextDidChange(_ notification: Notification) {
@@ -43,15 +49,56 @@ struct InlineLapLabelEditor: NSViewRepresentable {
             parent.text = field.stringValue
         }
 
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            isOutsideCommitEnabled = true
+        }
+
         func controlTextDidEndEditing(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             parent.text = field.stringValue
+            isOutsideCommitEnabled = false
             parent.onCommit()
+        }
+
+        func installOutsideClickMonitor() {
+            guard outsideClickMonitor == nil else { return }
+
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self else { return event }
+                guard self.isOutsideCommitEnabled else { return event }
+                guard
+                    let field = self.textField,
+                    let window = field.window
+                else {
+                    return event
+                }
+
+                // Keep checks lightweight to avoid QoS inversion warnings.
+                guard event.windowNumber == window.windowNumber else { return event }
+
+                let pointInField = field.convert(event.locationInWindow, from: nil)
+                if field.bounds.contains(pointInField) {
+                    return event
+                }
+
+                if let editor = field.currentEditor() {
+                    let pointInEditor = editor.convert(event.locationInWindow, from: nil)
+                    if editor.bounds.contains(pointInEditor) {
+                        return event
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    window.makeFirstResponder(nil)
+                }
+                return event
+            }
         }
 
         func requestInitialFocusIfNeeded(on field: NSTextField, token: Int) {
             guard activeFocusRequestToken != token else { return }
             activeFocusRequestToken = token
+            isOutsideCommitEnabled = false
             requestFocus(on: field, token: token, remainingRetries: 8)
         }
 
@@ -61,12 +108,19 @@ struct InlineLapLabelEditor: NSViewRepresentable {
                 guard self.parent.focusToken == token else { return }
 
                 if let window = field.window, window.makeFirstResponder(field) {
+                    self.isOutsideCommitEnabled = true
                     return
                 }
 
                 guard remainingRetries > 0 else { return }
                 self.requestFocus(on: field, token: token, remainingRetries: remainingRetries - 1)
             }
+        }
+
+        private func removeOutsideClickMonitor() {
+            guard let outsideClickMonitor else { return }
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
         }
     }
 
@@ -92,6 +146,7 @@ struct InlineLapLabelEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
         context.coordinator.parent = self
+        context.coordinator.installOutsideClickMonitor()
 
         if nsView.currentEditor() == nil, nsView.stringValue != text {
             nsView.stringValue = text
