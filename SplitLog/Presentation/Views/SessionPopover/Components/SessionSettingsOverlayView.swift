@@ -19,7 +19,7 @@ struct SessionSettingsOverlayView: View {
             case .deleteSessionData:
                 "セッション情報を削除しますか？"
             case .deleteLapData:
-                "ラップ情報を削除しますか？"
+                "Splite情報を削除しますか？"
             case .resetSettings:
                 "設定を初期化しますか？"
             case .initializeAllData:
@@ -30,9 +30,9 @@ struct SessionSettingsOverlayView: View {
         var message: String {
             switch self {
             case .deleteSessionData:
-                "全セッション・ラップ・メモを削除します。"
+                "全セッション・Splite・メモを削除します。"
             case .deleteLapData:
-                "全セッションのラップ・メモを削除します（セッション名は保持）。"
+                "全セッションのSplite・メモを削除します（セッション名は保持）。"
             case .resetSettings:
                 "アプリ設定をすべてデフォルトに戻します。"
             case .initializeAllData:
@@ -183,7 +183,7 @@ struct SessionSettingsOverlayView: View {
                             }
 
                             storageActionRow(
-                                title: "ラップ情報",
+                                title: "Splite情報",
                                 systemImage: "trash",
                                 destructive: true
                             ) {

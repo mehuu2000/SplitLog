@@ -20,14 +20,14 @@ struct SessionLapMemoOverlayView: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("ラップメモ")
+                Text("Spliteメモ")
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("ラップ名")
+                    Text("Splite名")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    TextField("ラップ名", text: $lapLabel)
+                    TextField("Splite名", text: $lapLabel)
                         .textFieldStyle(.roundedBorder)
                 }
 

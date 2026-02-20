@@ -247,7 +247,7 @@ struct SessionPopoverView: View {
                             Button(primaryActionButtonTitle, action: handlePrimaryAction)
                                 .buttonStyle(.borderedProminent)
 
-                            Button("ラップ終了", action: handleFinishLap)
+                            Button("Split", action: handleFinishLap)
                                 .buttonStyle(.bordered)
                                 .disabled(stopwatch.state != .running)
                         }
@@ -285,7 +285,7 @@ struct SessionPopoverView: View {
                             .buttonStyle(.borderedProminent)
                             .tint(colorResolver.controlTint)
 
-                        Button("ラップ終了", action: handleFinishLap)
+                        Button("Split", action: handleFinishLap)
                             .buttonStyle(.bordered)
                             .tint(colorResolver.controlTint)
                             .disabled(stopwatch.state != .running)
@@ -352,7 +352,7 @@ struct SessionPopoverView: View {
                     title: isShowingDeleteSessionConfirmation ? "セッションを削除しますか？" : "リセットしますか？",
                     message: isShowingDeleteSessionConfirmation
                         ? "現在表示中のセッションを削除します。"
-                        : "現在表示中のセッションとラップを初期状態に戻します。",
+                        : "現在表示中のセッションとSpliteを初期状態に戻します。",
                     confirmButtonTitle: isShowingDeleteSessionConfirmation ? "削除" : "リセット",
                     isMonochrome: colorResolver.isMonochrome,
                     onCancel: {
@@ -593,11 +593,11 @@ struct SessionPopoverView: View {
     private var primaryActionButtonTitle: String {
         switch stopwatch.state {
         case .idle, .finished:
-            "作業開始"
+            "Start"
         case .running, .paused:
-            "作業終了"
+            "Stop"
         case .stopped:
-            "作業再開"
+            "Resume"
         }
     }
 
@@ -796,7 +796,7 @@ struct SessionPopoverView: View {
         lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds, format: timeFormat)))】")
 
         if stopwatch.laps.isEmpty {
-            lines.append("・ラップはまだありません")
+            lines.append("・Splitはまだありません")
             return lines.joined(separator: "\n")
         }
 

@@ -30,10 +30,10 @@ struct SessionLapListView: View {
         VStack(alignment: .leading, spacing: 8) {
             if laps.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("ラップはまだありません")
+                    Text("Splitはまだありません")
                         .foregroundStyle(subtitleColor)
                         .font(.subheadline)
-                    Text("作業を開始して下さい")
+                    Text("Startして下さい")
                         .foregroundStyle(subtitleColor)
                         .font(.caption)
                 }
