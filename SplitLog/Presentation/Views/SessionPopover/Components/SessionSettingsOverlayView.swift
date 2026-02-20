@@ -31,7 +31,11 @@ struct SessionSettingsOverlayView: View {
                         "テーマカラー",
                         selection: Binding(
                             get: { settingsStore.themeMode },
-                            set: { settingsStore.setThemeMode($0) }
+                            set: { newValue in
+                                Task { @MainActor in
+                                    settingsStore.setThemeMode(newValue)
+                                }
+                            }
                         )
                     ) {
                         Text("カラー")
@@ -51,7 +55,11 @@ struct SessionSettingsOverlayView: View {
                         "経過時間の円を表示",
                         isOn: Binding(
                             get: { settingsStore.showTimelineRing },
-                            set: { settingsStore.setShowTimelineRing($0) }
+                            set: { isVisible in
+                                Task { @MainActor in
+                                    settingsStore.setShowTimelineRing(isVisible)
+                                }
+                            }
                         )
                     )
                 }
