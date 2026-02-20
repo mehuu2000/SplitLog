@@ -53,7 +53,7 @@ final class StopwatchService: ObservableObject {
         var state: SessionState
         var pauseStartedAt: Date?
         var lastLapActivationAt: Date?
-        var completedPauseIntervals: [DateInterval]
+        var totalPausedDuration: TimeInterval
     }
 
     init(
@@ -296,7 +296,7 @@ final class StopwatchService: ObservableObject {
         context.selectedLapID = nil
         context.pauseStartedAt = nil
         context.lastLapActivationAt = nil
-        context.completedPauseIntervals = []
+        context.totalPausedDuration = 0
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
@@ -314,7 +314,7 @@ final class StopwatchService: ObservableObject {
             context.selectedLapID = nil
             context.pauseStartedAt = nil
             context.lastLapActivationAt = nil
-            context.completedPauseIntervals = []
+            context.totalPausedDuration = 0
             sessionContexts[sessionID] = context
         }
 
@@ -529,7 +529,7 @@ final class StopwatchService: ObservableObject {
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
-            completedPauseIntervals: []
+            totalPausedDuration: 0
         )
     }
 
@@ -551,7 +551,7 @@ final class StopwatchService: ObservableObject {
         context.state = .running
         context.pauseStartedAt = nil
         context.lastLapActivationAt = date
-        context.completedPauseIntervals = []
+        context.totalPausedDuration = 0
     }
 
     private func stopRunningSessions(except keepSessionID: UUID?, at date: Date) {
@@ -569,7 +569,7 @@ final class StopwatchService: ObservableObject {
         guard context.state == .paused || context.state == .stopped else { return }
         let pausedAt = context.pauseStartedAt ?? date
         let resumedAt = max(date, pausedAt)
-        context.completedPauseIntervals.append(DateInterval(start: pausedAt, end: resumedAt))
+        context.totalPausedDuration += max(0, resumedAt.timeIntervalSince(pausedAt))
         context.pauseStartedAt = nil
         context.state = .running
         context.lastLapActivationAt = resumedAt
@@ -736,17 +736,9 @@ final class StopwatchService: ObservableObject {
         guard end > start else { return 0 }
 
         let rawDuration = end.timeIntervalSince(start)
-        let pausedDuration = context.completedPauseIntervals.reduce(0) { partial, interval in
-            partial + overlapDuration(start: start, end: end, interval: interval)
-        }
+        let pausedDuration = max(0, context.totalPausedDuration)
 
         return max(0, rawDuration - pausedDuration)
-    }
-
-    private func overlapDuration(start: Date, end: Date, interval: DateInterval) -> TimeInterval {
-        let overlapStart = max(start, interval.start)
-        let overlapEnd = min(end, interval.end)
-        return max(0, overlapEnd.timeIntervalSince(overlapStart))
     }
 
     private func restorePersistedState() {
@@ -895,7 +887,8 @@ final class StopwatchService: ObservableObject {
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
             lastLapActivationAt: context.lastLapActivationAt,
-            completedPauseIntervals: context.completedPauseIntervals
+            totalPausedDuration: context.totalPausedDuration,
+            completedPauseIntervals: []
         )
     }
 
@@ -908,7 +901,7 @@ final class StopwatchService: ObservableObject {
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
             lastLapActivationAt: context.lastLapActivationAt,
-            completedPauseIntervals: context.completedPauseIntervals
+            totalPausedDuration: max(0, context.totalPausedDuration)
         )
     }
 

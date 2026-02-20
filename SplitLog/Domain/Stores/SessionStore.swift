@@ -27,7 +27,58 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
     var state: SessionState
     var pauseStartedAt: Date?
     var lastLapActivationAt: Date?
+    var totalPausedDuration: TimeInterval
     var completedPauseIntervals: [DateInterval]
+
+    init(
+        session: WorkSession,
+        laps: [WorkLap],
+        selectedLapID: UUID?,
+        state: SessionState,
+        pauseStartedAt: Date?,
+        lastLapActivationAt: Date?,
+        totalPausedDuration: TimeInterval,
+        completedPauseIntervals: [DateInterval]
+    ) {
+        self.session = session
+        self.laps = laps
+        self.selectedLapID = selectedLapID
+        self.state = state
+        self.pauseStartedAt = pauseStartedAt
+        self.lastLapActivationAt = lastLapActivationAt
+        self.totalPausedDuration = totalPausedDuration
+        self.completedPauseIntervals = completedPauseIntervals
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case session
+        case laps
+        case selectedLapID
+        case state
+        case pauseStartedAt
+        case lastLapActivationAt
+        case totalPausedDuration
+        case completedPauseIntervals
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        session = try container.decode(WorkSession.self, forKey: .session)
+        laps = try container.decode([WorkLap].self, forKey: .laps)
+        selectedLapID = try container.decodeIfPresent(UUID.self, forKey: .selectedLapID)
+        state = try container.decode(SessionState.self, forKey: .state)
+        pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
+        lastLapActivationAt = try container.decodeIfPresent(Date.self, forKey: .lastLapActivationAt)
+        completedPauseIntervals = try container.decodeIfPresent([DateInterval].self, forKey: .completedPauseIntervals) ?? []
+
+        if let totalPausedDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .totalPausedDuration) {
+            self.totalPausedDuration = max(0, totalPausedDuration)
+        } else {
+            self.totalPausedDuration = completedPauseIntervals.reduce(0) { partial, interval in
+                partial + max(0, interval.duration)
+            }
+        }
+    }
 }
 
 struct StopwatchStorageSnapshot: Equatable, Codable, Sendable {
