@@ -33,7 +33,7 @@ struct SessionLapListView: View {
                     Text("Splitはまだありません")
                         .foregroundStyle(subtitleColor)
                         .font(.subheadline)
-                    Text("Startして下さい")
+                    Text("開始して下さい")
                         .foregroundStyle(subtitleColor)
                         .font(.caption)
                 }

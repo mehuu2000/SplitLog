@@ -352,7 +352,7 @@ struct SessionPopoverView: View {
                     title: isShowingDeleteSessionConfirmation ? "セッションを削除しますか？" : "リセットしますか？",
                     message: isShowingDeleteSessionConfirmation
                         ? "現在表示中のセッションを削除します。"
-                        : "現在表示中のセッションとSpliteを初期状態に戻します。",
+                        : "現在表示中のセッションとSplitを初期状態に戻します。",
                     confirmButtonTitle: isShowingDeleteSessionConfirmation ? "削除" : "リセット",
                     isMonochrome: colorResolver.isMonochrome,
                     onCancel: {
@@ -593,11 +593,11 @@ struct SessionPopoverView: View {
     private var primaryActionButtonTitle: String {
         switch stopwatch.state {
         case .idle, .finished:
-            "Start"
+            "開始"
         case .running, .paused:
-            "Stop"
+            "停止"
         case .stopped:
-            "Resume"
+            "再開"
         }
     }
 

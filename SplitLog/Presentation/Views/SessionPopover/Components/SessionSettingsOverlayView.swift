@@ -19,22 +19,22 @@ struct SessionSettingsOverlayView: View {
             case .deleteSessionData:
                 "セッション情報を削除しますか？"
             case .deleteLapData:
-                "Splite情報を削除しますか？"
+                "Split情報を削除しますか？"
             case .resetSettings:
-                "設定を初期化しますか？"
+                "設定のみ初期化しますか？"
             case .initializeAllData:
-                "すべて初期化しますか？"
+                "全データを初期化しますか？"
             }
         }
 
         var message: String {
             switch self {
             case .deleteSessionData:
-                "全セッション・Splite・メモを削除します。"
+                "全セッション・Split・メモを削除します。"
             case .deleteLapData:
-                "全セッションのSplite・メモを削除します（セッション名は保持）。"
+                "全セッションのSplit・メモを削除します（セッション名は保持）。"
             case .resetSettings:
-                "アプリ設定をすべてデフォルトに戻します。"
+                "アプリ設定のみをデフォルトに戻します。"
             case .initializeAllData:
                 "全データと設定を削除して初期状態に戻します。"
             }
@@ -183,7 +183,7 @@ struct SessionSettingsOverlayView: View {
                             }
 
                             storageActionRow(
-                                title: "Splite情報",
+                                title: "Split情報",
                                 systemImage: "trash",
                                 destructive: true
                             ) {
@@ -191,7 +191,7 @@ struct SessionSettingsOverlayView: View {
                             }
 
                             storageActionRow(
-                                title: "設定の初期化",
+                                title: "設定のみ初期化",
                                 systemImage: "arrow.counterclockwise",
                                 destructive: false
                             ) {
@@ -199,7 +199,7 @@ struct SessionSettingsOverlayView: View {
                             }
 
                             storageActionRow(
-                                title: "初期化",
+                                title: "全データ初期化",
                                 systemImage: "exclamationmark.triangle",
                                 destructive: true
                             ) {
