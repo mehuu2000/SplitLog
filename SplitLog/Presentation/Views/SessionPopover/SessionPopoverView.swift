@@ -47,6 +47,7 @@ struct SessionPopoverView: View {
     @State private var isShowingResetConfirmation = false
     @State private var isShowingDeleteSessionConfirmation = false
     @State private var isShowingSessionOverflowList = false
+    @State private var isShowingSettingsModal = false
     @State private var memoEditingLapID: UUID?
     @State private var memoLapLabelDraft = ""
     @State private var memoLapTextDraft = ""
@@ -101,6 +102,21 @@ struct SessionPopoverView: View {
                         .buttonStyle(.plain)
                         .help("セッション追加")
                         .accessibilityLabel("セッション追加")
+
+                        Button {
+                            isShowingSettingsModal = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 12, weight: .semibold))
+                                .frame(width: 24, height: 24)
+                                .background(
+                                    Circle()
+                                        .fill(Color.primary.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help("設定")
+                        .accessibilityLabel("設定")
                     }
                 }
 
