@@ -38,6 +38,7 @@ struct SessionPopoverView: View {
     ]
 
     @StateObject private var stopwatch: StopwatchService
+    @StateObject private var appSettingsStore: AppSettingsStore
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
@@ -56,12 +57,19 @@ struct SessionPopoverView: View {
     private let sessionTitleAreaWidth: CGFloat = 250
     private let sessionTitleAreaHeight: CGFloat = 28
 
+    init(stopwatch: StopwatchService, appSettingsStore: AppSettingsStore) {
+        _stopwatch = StateObject(wrappedValue: stopwatch)
+        _appSettingsStore = StateObject(wrappedValue: appSettingsStore)
+    }
+
     init(stopwatch: StopwatchService) {
         _stopwatch = StateObject(wrappedValue: stopwatch)
+        _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
     }
 
     init() {
         _stopwatch = StateObject(wrappedValue: StopwatchService())
+        _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
     }
 
     var body: some View {
@@ -104,6 +112,7 @@ struct SessionPopoverView: View {
                         .accessibilityLabel("セッション追加")
 
                         Button {
+                            isShowingSessionOverflowList = false
                             isShowingSettingsModal = true
                         } label: {
                             Image(systemName: "gearshape")
@@ -266,6 +275,15 @@ struct SessionPopoverView: View {
                     elapsedText: formatDuration(seconds: lapDisplayedSeconds[memoLap.id] ?? 0),
                     memoText: $memoLapTextDraft,
                     onClose: commitLapMemoEdit
+                )
+            }
+
+            if isShowingSettingsModal {
+                SessionSettingsOverlayView(
+                    settingsStore: appSettingsStore,
+                    onClose: {
+                        isShowingSettingsModal = false
+                    }
                 )
             }
         }

@@ -13,9 +13,11 @@ final class MenuBarController: NSObject {
     private let popover = NSPopover()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let stopwatch: StopwatchService
+    private let appSettingsStore: AppSettingsStore
 
     override init() {
         self.stopwatch = StopwatchService()
+        self.appSettingsStore = AppSettingsStore()
         super.init()
         configurePopover()
         configureStatusItem()
@@ -28,7 +30,12 @@ final class MenuBarController: NSObject {
     private func configurePopover() {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 540, height: 380)
-        popover.contentViewController = NSHostingController(rootView: SessionPopoverView(stopwatch: stopwatch))
+        popover.contentViewController = NSHostingController(
+            rootView: SessionPopoverView(
+                stopwatch: stopwatch,
+                appSettingsStore: appSettingsStore
+            )
+        )
     }
 
     private func configureStatusItem() {
