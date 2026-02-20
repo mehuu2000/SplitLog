@@ -56,6 +56,8 @@ struct SessionPopoverView: View {
     @State private var memoLapLabelDraft = ""
     @State private var memoLapTextDraft = ""
     @State private var sessionSummaryDraft = ""
+    @State private var toastMessage: String?
+    @State private var toastGeneration: Int = 0
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -417,6 +419,29 @@ struct SessionPopoverView: View {
                     }
                 )
             }
+
+            if let toastMessage {
+                VStack {
+                    Text(toastMessage)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.primary.opacity(0.9))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.92))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                        )
+                    Spacer()
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(999)
+                .allowsHitTesting(false)
+            }
         }
         .padding(14)
         .frame(width: popoverSize.width, height: popoverSize.height)
@@ -661,16 +686,19 @@ struct SessionPopoverView: View {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
         stopwatch.resetToIdle()
+        showToast("セッション情報を削除しました")
     }
 
     private func handleDeleteAllLapData() {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
         stopwatch.clearAllLapsAndMemos()
+        showToast("Split情報を削除しました")
     }
 
     private func handleResetAllSettings() {
         appSettingsStore.resetToDefaults()
+        showToast("設定を初期化しました")
     }
 
     private func handleInitializeAllData() {
@@ -678,6 +706,22 @@ struct SessionPopoverView: View {
         commitActiveLapMemoEditIfNeeded()
         stopwatch.resetToIdle()
         appSettingsStore.resetToDefaults()
+        showToast("全データを初期化しました")
+    }
+
+    private func showToast(_ message: String) {
+        toastGeneration += 1
+        let generation = toastGeneration
+        withAnimation(.easeOut(duration: 0.18)) {
+            toastMessage = message
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            guard generation == toastGeneration else { return }
+            withAnimation(.easeIn(duration: 0.2)) {
+                toastMessage = nil
+            }
+        }
     }
 
     private func beginLapLabelEdit(for lap: WorkLap) {
