@@ -10,8 +10,32 @@ import SwiftUI
 struct SessionSelectorCapsuleView: View {
     let sessions: [WorkSession]
     let selectedSessionID: UUID?
+    let capsuleBorderColor: Color
+    let selectedChipColor: Color
+    let overflowButtonBackgroundColor: Color
+    let overflowButtonIconColor: Color
     @Binding var isShowingOverflowList: Bool
     let onSelectSession: (UUID) -> Void
+
+    init(
+        sessions: [WorkSession],
+        selectedSessionID: UUID?,
+        capsuleBorderColor: Color = Color.primary.opacity(0.28),
+        selectedChipColor: Color = Color.primary.opacity(0.14),
+        overflowButtonBackgroundColor: Color = Color.primary.opacity(0.10),
+        overflowButtonIconColor: Color = Color.primary,
+        isShowingOverflowList: Binding<Bool>,
+        onSelectSession: @escaping (UUID) -> Void
+    ) {
+        self.sessions = sessions
+        self.selectedSessionID = selectedSessionID
+        self.capsuleBorderColor = capsuleBorderColor
+        self.selectedChipColor = selectedChipColor
+        self.overflowButtonBackgroundColor = overflowButtonBackgroundColor
+        self.overflowButtonIconColor = overflowButtonIconColor
+        _isShowingOverflowList = isShowingOverflowList
+        self.onSelectSession = onSelectSession
+    }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -20,7 +44,7 @@ struct SessionSelectorCapsuleView: View {
         }
         .background(
             Capsule()
-                .stroke(Color.primary.opacity(0.28), lineWidth: 1)
+                .stroke(capsuleBorderColor, lineWidth: 1)
         )
         .onChange(of: sessions.count) { _, count in
             if count == 0 {
@@ -73,7 +97,7 @@ struct SessionSelectorCapsuleView: View {
                 .frame(width: 74, height: 22)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
+                        .fill(isSelected ? selectedChipColor : Color.clear)
                 )
         }
         .buttonStyle(.plain)
@@ -86,13 +110,13 @@ struct SessionSelectorCapsuleView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.primary.opacity(0.10))
+                    .fill(overflowButtonBackgroundColor)
                 VStack(spacing: 2) {
                     Circle().frame(width: 3, height: 3)
                     Circle().frame(width: 3, height: 3)
                     Circle().frame(width: 3, height: 3)
                 }
-                .foregroundStyle(Color.primary)
+                .foregroundStyle(overflowButtonIconColor)
             }
             .frame(width: 22, height: 22)
             .contentShape(Rectangle())

@@ -64,6 +64,7 @@ struct SessionSettingsOverlayView: View {
             }
             .padding(14)
             .frame(width: 360)
+            .tint(settingsStore.themeMode == .monochrome ? Color(white: 0.25) : .accentColor)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(

@@ -18,6 +18,9 @@ struct SessionTimelineRingView: View {
     let innerSlices: [TimelineRingSlice]
     let outerSlices: [TimelineRingSlice]
     let showOuterTrack: Bool
+    let trackColor: Color
+    let boundaryColor: Color
+    let perimeterBorderColor: Color
 
     private let innerLineWidth: CGFloat = 30
     private let outerLineWidth: CGFloat = 30
@@ -26,12 +29,27 @@ struct SessionTimelineRingView: View {
     private let contactBorderOutwardOffset: CGFloat = 3
     private let ringDiameterInset: CGFloat = 16
 
+    init(
+        innerSlices: [TimelineRingSlice],
+        outerSlices: [TimelineRingSlice],
+        showOuterTrack: Bool,
+        trackColor: Color = Color.primary.opacity(0.1),
+        boundaryColor: Color = .white,
+        perimeterBorderColor: Color = .white
+    ) {
+        self.innerSlices = innerSlices
+        self.outerSlices = outerSlices
+        self.showOuterTrack = showOuterTrack
+        self.trackColor = trackColor
+        self.boundaryColor = boundaryColor
+        self.perimeterBorderColor = perimeterBorderColor
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
             let ringSide = max(0, side - ringDiameterInset)
             let innerSide = max(0, ringSide - 56)
-            let trackColor = Color.primary.opacity(0.1)
 
             ZStack {
                 if showOuterTrack {
@@ -118,7 +136,7 @@ struct SessionTimelineRingView: View {
                     path.move(to: start)
                     path.addLine(to: end)
                 }
-                .stroke(Color.white, style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round))
+                .stroke(boundaryColor, style: StrokeStyle(lineWidth: segmentBoundaryLineWidth, lineCap: .round))
             }
         }
         .frame(width: frameSide, height: frameSide)
@@ -127,7 +145,7 @@ struct SessionTimelineRingView: View {
     private func outerPerimeterBorder(frameSide: CGFloat, ringLineWidth: CGFloat) -> some View {
         Circle()
             .stroke(
-                Color.white,
+                perimeterBorderColor,
                 style: StrokeStyle(lineWidth: perimeterBorderLineWidth, lineCap: .round)
             )
             .frame(
@@ -144,7 +162,7 @@ struct SessionTimelineRingView: View {
     ) -> some View {
         Circle()
             .stroke(
-                Color.white,
+                perimeterBorderColor,
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
             )
             .frame(

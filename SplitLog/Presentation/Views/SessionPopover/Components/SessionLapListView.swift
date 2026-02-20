@@ -12,6 +12,10 @@ struct SessionLapListView: View {
     let selectedLapID: UUID?
     let lapDisplayedSeconds: [UUID: Int]
     let subtitleText: String
+    let subtitleColor: Color
+    let rowPrimaryTextColor: Color
+    let rowSecondaryIconColor: Color
+    let inlineEditorBackgroundColor: Color
     @Binding var editingLapID: UUID?
     @Binding var editingLapLabelDraft: String
     let editingFocusToken: Int
@@ -27,10 +31,10 @@ struct SessionLapListView: View {
             if laps.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("ラップはまだありません")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(subtitleColor)
                         .font(.subheadline)
                     Text("作業を開始して下さい")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(subtitleColor)
                         .font(.caption)
                 }
             } else {
@@ -47,6 +51,9 @@ struct SessionLapListView: View {
                                     editingFocusToken: editingFocusToken,
                                     formatDuration: formatDuration,
                                     color: colorForLap(lap.index),
+                                    primaryTextColor: rowPrimaryTextColor,
+                                    secondaryIconColor: rowSecondaryIconColor,
+                                    inlineEditorBackgroundColor: inlineEditorBackgroundColor,
                                     onSelectLap: {
                                         onSelectLap(lap.id)
                                     },
@@ -78,7 +85,7 @@ struct SessionLapListView: View {
             if !subtitleText.isEmpty {
                 Text(subtitleText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(subtitleColor)
                     .padding(.top, 2)
             }
         }
@@ -95,6 +102,9 @@ private struct SessionLapRowView: View {
     let editingFocusToken: Int
     let formatDuration: (Int) -> String
     let color: Color
+    let primaryTextColor: Color
+    let secondaryIconColor: Color
+    let inlineEditorBackgroundColor: Color
     let onSelectLap: () -> Void
     let onOpenMemo: () -> Void
     let onBeginEdit: () -> Void
@@ -106,7 +116,7 @@ private struct SessionLapRowView: View {
                 Button(action: onSelectLap) {
                     Image(systemName: selectedLapID == lap.id ? "largecircle.fill.circle" : "circle")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(primaryTextColor)
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
@@ -124,12 +134,12 @@ private struct SessionLapRowView: View {
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.9))
+                            .fill(inlineEditorBackgroundColor)
                     )
                 } else {
                     Text("\(lap.label)：")
                         .fontWeight(.medium)
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(primaryTextColor)
                         .contentShape(Rectangle())
                         .onTapGesture(perform: onBeginEdit)
                 }
@@ -139,7 +149,7 @@ private struct SessionLapRowView: View {
                 Button(action: onOpenMemo) {
                     Image(systemName: "note.text")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.black.opacity(0.8))
+                        .foregroundStyle(secondaryIconColor)
                         .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
@@ -148,7 +158,7 @@ private struct SessionLapRowView: View {
 
                 Text(formatDuration(displayedSeconds))
                     .monospacedDigit()
-                    .foregroundStyle(Color.black)
+                    .foregroundStyle(primaryTextColor)
             }
 
             Rectangle()

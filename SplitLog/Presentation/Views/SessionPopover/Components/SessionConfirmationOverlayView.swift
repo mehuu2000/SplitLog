@@ -11,6 +11,7 @@ struct SessionConfirmationOverlayView: View {
     let title: String
     let message: String
     let confirmButtonTitle: String
+    let isMonochrome: Bool
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -35,8 +36,13 @@ struct SessionConfirmationOverlayView: View {
                     Button("キャンセル", action: onCancel)
                         .buttonStyle(.bordered)
 
-                    Button(confirmButtonTitle, role: .destructive, action: onConfirm)
-                        .buttonStyle(.borderedProminent)
+                    if isMonochrome {
+                        Button(confirmButtonTitle, action: onConfirm)
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(confirmButtonTitle, role: .destructive, action: onConfirm)
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
             .padding(14)

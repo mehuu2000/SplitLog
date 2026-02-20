@@ -73,6 +73,7 @@ struct SessionPopoverView: View {
     }
 
     var body: some View {
+        let colorResolver = self.colorResolver
         let referenceDate = stopwatch.clock
         let timeline = timelineSlices(referenceDate: referenceDate)
         let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: referenceDate))
@@ -92,6 +93,10 @@ struct SessionPopoverView: View {
                         SessionSelectorCapsuleView(
                             sessions: stopwatch.sessions,
                             selectedSessionID: stopwatch.selectedSessionID,
+                            capsuleBorderColor: colorResolver.capsuleBorderColor,
+                            selectedChipColor: colorResolver.sessionChipSelectedColor,
+                            overflowButtonBackgroundColor: colorResolver.overflowButtonBackgroundColor,
+                            overflowButtonIconColor: colorResolver.overflowButtonIconColor,
                             isShowingOverflowList: $isShowingSessionOverflowList,
                             onSelectSession: { sessionID in
                                 handleSelectSession(sessionID: sessionID)
@@ -104,7 +109,7 @@ struct SessionPopoverView: View {
                                 .frame(width: 24, height: 24)
                                 .background(
                                     Circle()
-                                        .fill(Color.primary.opacity(0.08))
+                                        .fill(colorResolver.headerControlBackground)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -120,7 +125,7 @@ struct SessionPopoverView: View {
                                 .frame(width: 24, height: 24)
                                 .background(
                                     Circle()
-                                        .fill(Color.primary.opacity(0.08))
+                                        .fill(colorResolver.headerControlBackground)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -142,7 +147,7 @@ struct SessionPopoverView: View {
                     Spacer()
 
                     Text("全体経過")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(colorResolver.subtitleTextColor)
                     Text(formatDuration(seconds: totalElapsedSeconds))
                         .monospacedDigit()
                 }
@@ -152,7 +157,10 @@ struct SessionPopoverView: View {
                     SessionTimelineRingView(
                         innerSlices: timeline.inner,
                         outerSlices: timeline.outer,
-                        showOuterTrack: timeline.showOuterTrack
+                        showOuterTrack: timeline.showOuterTrack,
+                        trackColor: colorResolver.timelineTrackColor,
+                        boundaryColor: colorResolver.timelineBorderColor,
+                        perimeterBorderColor: colorResolver.timelineBorderColor
                     )
                     .frame(width: 210, height: 210)
 
@@ -161,6 +169,10 @@ struct SessionPopoverView: View {
                         selectedLapID: stopwatch.selectedLapID,
                         lapDisplayedSeconds: lapDisplayedSeconds,
                         subtitleText: subtitleText,
+                        subtitleColor: colorResolver.subtitleTextColor,
+                        rowPrimaryTextColor: colorResolver.lapPrimaryTextColor,
+                        rowSecondaryIconColor: colorResolver.lapSecondaryIconColor,
+                        inlineEditorBackgroundColor: colorResolver.inlineEditorBackgroundColor,
                         editingLapID: $editingLapID,
                         editingLapLabelDraft: $editingLapLabelDraft,
                         editingFocusToken: editingFocusToken,
@@ -192,6 +204,7 @@ struct SessionPopoverView: View {
                             .buttonStyle(.bordered)
                             .disabled(stopwatch.state != .running)
                     }
+                    .tint(colorResolver.controlTint)
 
                     Spacer()
 
@@ -202,6 +215,7 @@ struct SessionPopoverView: View {
                     .frame(width: 32, height: 32)
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .tint(colorResolver.utilityButtonTint)
                     .help("リセット")
                     .accessibilityLabel("リセット")
                     .disabled(stopwatch.session == nil)
@@ -213,6 +227,7 @@ struct SessionPopoverView: View {
                     .frame(width: 32, height: 32)
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .tint(colorResolver.utilityButtonTint)
                     .help("現在セッションを削除")
                     .accessibilityLabel("現在セッションを削除")
                     .disabled(stopwatch.session == nil)
@@ -233,6 +248,9 @@ struct SessionPopoverView: View {
                         SessionOverflowPanelView(
                             sessions: stopwatch.sessions,
                             selectedSessionID: stopwatch.selectedSessionID,
+                            borderColor: colorResolver.overflowPanelBorderColor,
+                            selectedRowColor: colorResolver.overflowPanelSelectedRowColor,
+                            defaultRowColor: colorResolver.overflowPanelDefaultRowColor,
                             onSelectSession: { sessionID in
                                 isShowingSessionOverflowList = false
                                 handleSelectSession(sessionID: sessionID)
@@ -252,6 +270,7 @@ struct SessionPopoverView: View {
                         ? "現在表示中のセッションを削除します。"
                         : "現在表示中のセッションとラップを初期状態に戻します。",
                     confirmButtonTitle: isShowingDeleteSessionConfirmation ? "削除" : "リセット",
+                    isMonochrome: colorResolver.isMonochrome,
                     onCancel: {
                         isShowingResetConfirmation = false
                         isShowingDeleteSessionConfirmation = false
@@ -289,6 +308,7 @@ struct SessionPopoverView: View {
         }
         .padding(14)
         .frame(width: 540, height: 380)
+        .tint(colorResolver.controlTint)
         .background(.regularMaterial)
         .onAppear {
             stopwatch.setDisplayActive(true)
@@ -333,7 +353,7 @@ struct SessionPopoverView: View {
                     .fixedSize(horizontal: true, vertical: false)
 
                 Rectangle()
-                    .fill(Color.primary.opacity(0.22))
+                    .fill(colorResolver.sessionTitleUnderlineColor)
                     .frame(width: sessionTitleUnderlineWidth)
                     .frame(height: 1)
             }
@@ -357,11 +377,11 @@ struct SessionPopoverView: View {
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.9))
+                    .fill(colorResolver.inlineEditorBackgroundColor)
             )
 
             Rectangle()
-                .fill(Color.primary.opacity(0.22))
+                .fill(colorResolver.sessionTitleUnderlineColor)
                 .frame(width: sessionTitleUnderlineWidth)
                 .frame(height: 1)
         }
@@ -372,6 +392,10 @@ struct SessionPopoverView: View {
     private var subtitleText: String {
         guard !stopwatch.laps.isEmpty else { return "" }
         return stopwatchStateText
+    }
+
+    private var colorResolver: SessionThemeColorResolver {
+        SessionThemeColorResolver(mode: appSettingsStore.themeMode)
     }
 
     private var stopwatchStateText: String {
@@ -597,16 +621,7 @@ struct SessionPopoverView: View {
     }
 
     private func lapColor(for index: Int) -> Color {
-        let zeroBasedIndex = max(0, index - 1)
-        let cycle = zeroBasedIndex / Self.rgbWheel.count
-        let paletteIndex = (zeroBasedIndex + cycle) % Self.rgbWheel.count
-        let rgb = Self.rgbWheel[paletteIndex]
-
-        return Color(
-            red: rgb.0 / 255.0,
-            green: rgb.1 / 255.0,
-            blue: rgb.2 / 255.0
-        )
+        colorResolver.lapColor(for: index, rgbWheel: Self.rgbWheel)
     }
 
     private func displayedLapSeconds(referenceDate: Date, totalElapsedSeconds: Int) -> [UUID: Int] {

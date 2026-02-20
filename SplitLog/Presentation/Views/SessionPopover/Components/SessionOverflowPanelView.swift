@@ -10,7 +10,26 @@ import SwiftUI
 struct SessionOverflowPanelView: View {
     let sessions: [WorkSession]
     let selectedSessionID: UUID?
+    let borderColor: Color
+    let selectedRowColor: Color
+    let defaultRowColor: Color
     let onSelectSession: (UUID) -> Void
+
+    init(
+        sessions: [WorkSession],
+        selectedSessionID: UUID?,
+        borderColor: Color = Color.primary.opacity(0.12),
+        selectedRowColor: Color = Color.primary.opacity(0.14),
+        defaultRowColor: Color = Color.primary.opacity(0.07),
+        onSelectSession: @escaping (UUID) -> Void
+    ) {
+        self.sessions = sessions
+        self.selectedSessionID = selectedSessionID
+        self.borderColor = borderColor
+        self.selectedRowColor = selectedRowColor
+        self.defaultRowColor = defaultRowColor
+        self.onSelectSession = onSelectSession
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -26,7 +45,7 @@ struct SessionOverflowPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                .stroke(borderColor, lineWidth: 1)
         )
     }
 
@@ -44,7 +63,7 @@ struct SessionOverflowPanelView: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(isSelected ? Color.primary.opacity(0.14) : Color.primary.opacity(0.07))
+                        .fill(isSelected ? selectedRowColor : defaultRowColor)
                 )
         }
         .buttonStyle(.plain)
