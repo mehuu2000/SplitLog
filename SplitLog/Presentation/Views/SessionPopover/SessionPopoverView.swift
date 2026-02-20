@@ -10,16 +10,6 @@ import SwiftUI
 
 @MainActor
 struct SessionPopoverView: View {
-    private enum SessionSummaryTimeFormat {
-        case decimalHours
-        case hourMinute
-    }
-
-    private enum SessionSummaryMemoFormat {
-        case bulleted
-        case plain
-    }
-
     private static let rgbWheel: [(Double, Double, Double)] = [
         (255, 0, 0),
         (255, 64, 0),
@@ -66,8 +56,6 @@ struct SessionPopoverView: View {
     @State private var memoLapLabelDraft = ""
     @State private var memoLapTextDraft = ""
     @State private var sessionSummaryDraft = ""
-    @State private var sessionSummaryTimeFormat: SessionSummaryTimeFormat = .decimalHours
-    @State private var sessionSummaryMemoFormat: SessionSummaryMemoFormat = .bulleted
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -561,7 +549,7 @@ struct SessionPopoverView: View {
         let hour = max(0, components.hour ?? 0)
         let minute = max(0, components.minute ?? 0)
 
-        switch sessionSummaryTimeFormat {
+        switch appSettingsStore.summaryTimeFormat {
         case .decimalHours:
             let decimalHours = Double(hour) + (Double(minute) / 60.0)
             return String(format: "%.1fh", decimalHours)
@@ -571,7 +559,7 @@ struct SessionPopoverView: View {
     }
 
     private var sessionSummaryMemoFormatLabel: String {
-        switch sessionSummaryMemoFormat {
+        switch appSettingsStore.summaryMemoFormat {
         case .bulleted:
             "- メモ"
         case .plain:
@@ -726,13 +714,11 @@ struct SessionPopoverView: View {
     ) {
         commitPendingInlineEdits()
         commitActiveLapMemoEditIfNeeded()
-        sessionSummaryTimeFormat = .decimalHours
-        sessionSummaryMemoFormat = .bulleted
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
             totalElapsedSeconds: totalElapsedSeconds,
-            timeFormat: sessionSummaryTimeFormat,
-            memoFormat: sessionSummaryMemoFormat
+            timeFormat: appSettingsStore.summaryTimeFormat,
+            memoFormat: appSettingsStore.summaryMemoFormat
         )
         isShowingSessionSummaryModal = true
     }
@@ -741,12 +727,13 @@ struct SessionPopoverView: View {
         lapDisplayedSeconds: [UUID: Int],
         totalElapsedSeconds: Int
     ) {
-        sessionSummaryTimeFormat = (sessionSummaryTimeFormat == .decimalHours) ? .hourMinute : .decimalHours
+        let nextFormat: SummaryTimeFormat = appSettingsStore.summaryTimeFormat == .decimalHours ? .hourMinute : .decimalHours
+        appSettingsStore.setSummaryTimeFormat(nextFormat)
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
             totalElapsedSeconds: totalElapsedSeconds,
-            timeFormat: sessionSummaryTimeFormat,
-            memoFormat: sessionSummaryMemoFormat
+            timeFormat: nextFormat,
+            memoFormat: appSettingsStore.summaryMemoFormat
         )
     }
 
@@ -754,12 +741,13 @@ struct SessionPopoverView: View {
         lapDisplayedSeconds: [UUID: Int],
         totalElapsedSeconds: Int
     ) {
-        sessionSummaryMemoFormat = (sessionSummaryMemoFormat == .bulleted) ? .plain : .bulleted
+        let nextFormat: SummaryMemoFormat = appSettingsStore.summaryMemoFormat == .bulleted ? .plain : .bulleted
+        appSettingsStore.setSummaryMemoFormat(nextFormat)
         sessionSummaryDraft = buildSessionSummaryText(
             lapDisplayedSeconds: lapDisplayedSeconds,
             totalElapsedSeconds: totalElapsedSeconds,
-            timeFormat: sessionSummaryTimeFormat,
-            memoFormat: sessionSummaryMemoFormat
+            timeFormat: appSettingsStore.summaryTimeFormat,
+            memoFormat: nextFormat
         )
     }
 
@@ -772,8 +760,8 @@ struct SessionPopoverView: View {
     private func buildSessionSummaryText(
         lapDisplayedSeconds: [UUID: Int],
         totalElapsedSeconds: Int,
-        timeFormat: SessionSummaryTimeFormat,
-        memoFormat: SessionSummaryMemoFormat
+        timeFormat: SummaryTimeFormat,
+        memoFormat: SummaryMemoFormat
     ) -> String {
         guard let session = stopwatch.session else { return "" }
 
@@ -808,7 +796,7 @@ struct SessionPopoverView: View {
         return lines.joined(separator: "\n")
     }
 
-    private func summaryDurationText(seconds: Int, format: SessionSummaryTimeFormat) -> String {
+    private func summaryDurationText(seconds: Int, format: SummaryTimeFormat) -> String {
         switch format {
         case .decimalHours:
             let roundedHours = max(0, Double(seconds) / 3600)

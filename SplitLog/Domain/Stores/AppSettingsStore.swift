@@ -37,6 +37,14 @@ final class AppSettingsStore: ObservableObject {
         settings.showTimelineRing
     }
 
+    var summaryTimeFormat: SummaryTimeFormat {
+        settings.summaryTimeFormat
+    }
+
+    var summaryMemoFormat: SummaryMemoFormat {
+        settings.summaryMemoFormat
+    }
+
     func setThemeMode(_ themeMode: ThemeMode) {
         guard settings.themeMode != themeMode else { return }
         settings.themeMode = themeMode
@@ -45,6 +53,16 @@ final class AppSettingsStore: ObservableObject {
     func setShowTimelineRing(_ isVisible: Bool) {
         guard settings.showTimelineRing != isVisible else { return }
         settings.showTimelineRing = isVisible
+    }
+
+    func setSummaryTimeFormat(_ format: SummaryTimeFormat) {
+        guard settings.summaryTimeFormat != format else { return }
+        settings.summaryTimeFormat = format
+    }
+
+    func setSummaryMemoFormat(_ format: SummaryMemoFormat) {
+        guard settings.summaryMemoFormat != format else { return }
+        settings.summaryMemoFormat = format
     }
 
     func update(_ settings: AppSettings) {

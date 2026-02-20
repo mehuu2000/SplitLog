@@ -64,6 +64,58 @@ struct SessionSettingsOverlayView: View {
                     )
                 }
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("サマリー表示")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    HStack {
+                        Text("メモ表示形式")
+                        Spacer()
+                        Picker(
+                            "メモ表示形式",
+                            selection: Binding(
+                                get: { settingsStore.summaryMemoFormat },
+                                set: { newValue in
+                                    Task { @MainActor in
+                                        settingsStore.setSummaryMemoFormat(newValue)
+                                    }
+                                }
+                            )
+                        ) {
+                            Text("- メモ")
+                                .tag(SummaryMemoFormat.bulleted)
+                            Text("メモ")
+                                .tag(SummaryMemoFormat.plain)
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+
+                    HStack {
+                        Text("時間表示形式")
+                        Spacer()
+                        Picker(
+                            "時間表示形式",
+                            selection: Binding(
+                                get: { settingsStore.summaryTimeFormat },
+                                set: { newValue in
+                                    Task { @MainActor in
+                                        settingsStore.setSummaryTimeFormat(newValue)
+                                    }
+                                }
+                            )
+                        ) {
+                            Text("N.Mh")
+                                .tag(SummaryTimeFormat.decimalHours)
+                            Text("N時間M分")
+                                .tag(SummaryTimeFormat.hourMinute)
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                }
+
                 HStack {
                     Spacer()
                     Button("閉じる", action: onClose)
