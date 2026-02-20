@@ -37,15 +37,27 @@ struct SessionSelectorCapsuleView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(sessions) { session in
-                        sessionChip(session)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(sessions) { session in
+                            sessionChip(session)
+                                .id(session.id)
+                        }
                     }
                 }
+                .onAppear {
+                    scrollToSelectedSession(using: proxy, animated: false)
+                }
+                .onChange(of: selectedSessionID) { _, _ in
+                    scrollToSelectedSession(using: proxy)
+                }
+                .onChange(of: sessions.count) { _, _ in
+                    scrollToSelectedSession(using: proxy, animated: false)
+                }
+                .frame(width: 220)
+                .clipped()
             }
-            .frame(width: 220)
-            .clipped()
         }
     }
 
@@ -92,5 +104,25 @@ struct SessionSelectorCapsuleView: View {
         .disabled(sessions.isEmpty)
         .opacity(sessions.isEmpty ? 0.6 : 1)
         .help("セッション一覧")
+    }
+
+    private func scrollToSelectedSession(using proxy: ScrollViewProxy, animated: Bool = true) {
+        guard let selectedSessionID, sessions.contains(where: { $0.id == selectedSessionID }) else {
+            return
+        }
+
+        let scrollAction = {
+            proxy.scrollTo(selectedSessionID, anchor: .center)
+        }
+
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    scrollAction()
+                }
+            } else {
+                scrollAction()
+            }
+        }
     }
 }
