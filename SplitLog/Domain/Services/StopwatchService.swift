@@ -10,6 +10,11 @@ import Foundation
 
 @MainActor
 final class StopwatchService: ObservableObject {
+    private enum PersistenceWriteMode {
+        case queued
+        case immediate
+    }
+
     struct PersistenceErrorEvent: Identifiable, Equatable {
         let id = UUID()
         let message: String
@@ -37,6 +42,7 @@ final class StopwatchService: ObservableObject {
     private var sessionOrder: [UUID] = []
     private var nextSessionNumber: Int = 1
     private let sessionStore: SessionStore?
+    private var persistenceWriter: CoalescingSessionStoreWriter?
     private let restoreReferenceDate: Date?
     private(set) var lastPersistenceSucceeded: Bool = true
 
@@ -64,6 +70,20 @@ final class StopwatchService: ObservableObject {
             self.sessionStore = FileSessionStore()
         } else {
             self.sessionStore = nil
+        }
+        if let sessionStore = self.sessionStore {
+            self.persistenceWriter = CoalescingSessionStoreWriter(sessionStore: sessionStore) { [weak self] operation in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.lastPersistenceSucceeded = false
+                    switch operation {
+                    case .save:
+                        self.reportPersistenceError("セッションデータの保存に失敗しました。")
+                    case .clear:
+                        self.reportPersistenceError("セッションデータの削除に失敗しました。")
+                    }
+                }
+            }
         }
         restorePersistedState()
         applySelectedContext()
@@ -263,7 +283,7 @@ final class StopwatchService: ObservableObject {
         clock = Date()
         stopClock()
 
-        return removePersistedState()
+        return removePersistedState(mode: .immediate)
     }
 
     func resetSelectedSession(at date: Date = Date()) {
@@ -320,7 +340,7 @@ final class StopwatchService: ObservableObject {
             nextSessionNumber = 1
             clock = date
             applySelectedContext()
-            removePersistedState()
+            removePersistedState(mode: .immediate)
             return
         }
 
@@ -404,7 +424,7 @@ final class StopwatchService: ObservableObject {
 
         clock = date
         applySelectedContext()
-        persistState(savedAt: date)
+        persistState(savedAt: date, mode: .immediate)
     }
 
     func elapsedSession(at referenceDate: Date? = nil) -> TimeInterval {
@@ -773,7 +793,10 @@ final class StopwatchService: ObservableObject {
     }
 
     @discardableResult
-    private func persistState(savedAt: Date? = nil) -> Bool {
+    private func persistState(
+        savedAt: Date? = nil,
+        mode: PersistenceWriteMode = .queued
+    ) -> Bool {
         guard let sessionStore else {
             lastPersistenceSucceeded = true
             return true
@@ -788,32 +811,70 @@ final class StopwatchService: ObservableObject {
             nextSessionNumber: nextSessionNumber
         )
 
-        do {
-            try sessionStore.saveSnapshot(payload)
+        switch mode {
+        case .queued:
+            persistenceWriter?.enqueueSave(payload)
             lastPersistenceSucceeded = true
             return true
-        } catch {
-            lastPersistenceSucceeded = false
-            reportPersistenceError("セッションデータの保存に失敗しました。")
-            return false
+        case .immediate:
+            if let persistenceWriter {
+                switch persistenceWriter.performImmediateSave(payload) {
+                case .success:
+                    lastPersistenceSucceeded = true
+                    return true
+                case .failure:
+                    lastPersistenceSucceeded = false
+                    reportPersistenceError("セッションデータの保存に失敗しました。")
+                    return false
+                }
+            } else {
+                do {
+                    try sessionStore.saveSnapshot(payload)
+                    lastPersistenceSucceeded = true
+                    return true
+                } catch {
+                    lastPersistenceSucceeded = false
+                    reportPersistenceError("セッションデータの保存に失敗しました。")
+                    return false
+                }
+            }
         }
     }
 
     @discardableResult
-    private func removePersistedState() -> Bool {
+    private func removePersistedState(mode: PersistenceWriteMode = .queued) -> Bool {
         guard let sessionStore else {
             lastPersistenceSucceeded = true
             return true
         }
 
-        do {
-            try sessionStore.saveSnapshot(nil)
+        switch mode {
+        case .queued:
+            persistenceWriter?.enqueueClear()
             lastPersistenceSucceeded = true
             return true
-        } catch {
-            lastPersistenceSucceeded = false
-            reportPersistenceError("セッションデータの削除に失敗しました。")
-            return false
+        case .immediate:
+            if let persistenceWriter {
+                switch persistenceWriter.performImmediateClear() {
+                case .success:
+                    lastPersistenceSucceeded = true
+                    return true
+                case .failure:
+                    lastPersistenceSucceeded = false
+                    reportPersistenceError("セッションデータの削除に失敗しました。")
+                    return false
+                }
+            } else {
+                do {
+                    try sessionStore.saveSnapshot(nil)
+                    lastPersistenceSucceeded = true
+                    return true
+                } catch {
+                    lastPersistenceSucceeded = false
+                    reportPersistenceError("セッションデータの削除に失敗しました。")
+                    return false
+                }
+            }
         }
     }
 
@@ -904,5 +965,116 @@ final class StopwatchService: ObservableObject {
             selectedSessionID: snapshot.selectedSessionID,
             nextSessionNumber: snapshot.nextSessionNumber
         )
+    }
+}
+
+private final class CoalescingSessionStoreWriter {
+    enum WriteOperation: Sendable {
+        case save
+        case clear
+    }
+
+    private enum PendingWrite {
+        case save(StopwatchStorageSnapshot)
+        case clear
+    }
+
+    private let sessionStore: SessionStore
+    private let debounceInterval: TimeInterval
+    private let onFailure: @Sendable (WriteOperation) -> Void
+    private let queue = DispatchQueue(label: "SplitLog.persistence.writer", qos: .utility)
+
+    private var pendingWrite: PendingWrite?
+    private var scheduledFlush: DispatchWorkItem?
+
+    init(
+        sessionStore: SessionStore,
+        debounceInterval: TimeInterval = 0.2,
+        onFailure: @escaping @Sendable (WriteOperation) -> Void = { _ in }
+    ) {
+        self.sessionStore = sessionStore
+        self.debounceInterval = debounceInterval
+        self.onFailure = onFailure
+    }
+
+    func enqueueSave(_ snapshot: StopwatchStorageSnapshot) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.pendingWrite = .save(snapshot)
+            self.scheduleFlushLocked()
+        }
+    }
+
+    func enqueueClear() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.pendingWrite = .clear
+            self.scheduleFlushLocked()
+        }
+    }
+
+    func performImmediateSave(_ snapshot: StopwatchStorageSnapshot) -> Result<Void, Error> {
+        queue.sync {
+            self.cancelPendingLocked()
+            return self.performLocked(.save(snapshot), reportFailure: false)
+        }
+    }
+
+    func performImmediateClear() -> Result<Void, Error> {
+        queue.sync {
+            self.cancelPendingLocked()
+            return self.performLocked(.clear, reportFailure: false)
+        }
+    }
+
+    private func scheduleFlushLocked() {
+        scheduledFlush?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.flushPendingLocked()
+        }
+
+        scheduledFlush = workItem
+        queue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+    }
+
+    private func flushPendingLocked() {
+        guard let pendingWrite else {
+            scheduledFlush = nil
+            return
+        }
+
+        self.pendingWrite = nil
+        scheduledFlush = nil
+        _ = performLocked(pendingWrite, reportFailure: true)
+    }
+
+    private func cancelPendingLocked() {
+        scheduledFlush?.cancel()
+        scheduledFlush = nil
+        pendingWrite = nil
+    }
+
+    private func performLocked(_ write: PendingWrite, reportFailure: Bool) -> Result<Void, Error> {
+        do {
+            switch write {
+            case let .save(snapshot):
+                try sessionStore.saveSnapshot(snapshot)
+            case .clear:
+                try sessionStore.saveSnapshot(nil)
+            }
+            return .success(())
+        } catch {
+            if reportFailure {
+                switch write {
+                case .save:
+                    onFailure(.save)
+                case .clear:
+                    onFailure(.clear)
+                }
+            }
+            return .failure(error)
+        }
     }
 }
