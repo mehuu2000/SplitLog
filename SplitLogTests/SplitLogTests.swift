@@ -499,6 +499,21 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func updateSessionTitle_persistsAndRestoresTitle() {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let title = "朝の集中作業"
+
+        let source = StopwatchService(autoTick: false, sessionStore: store)
+        source.startSession(at: t0)
+        let sessionID = try #require(source.session?.id)
+        source.updateSessionTitle(sessionID: sessionID, title: title)
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+        #expect(restored.session?.title == title)
+    }
+
+    @MainActor
     @Test func restore_duplicateSessionOrder_isDeduplicatedKeepingFirstSeenOrder() {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)

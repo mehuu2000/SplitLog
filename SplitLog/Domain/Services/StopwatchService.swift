@@ -328,6 +328,18 @@ final class StopwatchService: ObservableObject {
         persistState()
     }
 
+    func updateSessionTitle(sessionID: UUID, title: String) {
+        guard var context = sessionContexts[sessionID] else { return }
+
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        context.session.title = trimmed
+        sessionContexts[sessionID] = context
+        applySelectedContext()
+        persistState()
+    }
+
     func setDisplayActive(_ isActive: Bool) {
         guard isDisplayActive != isActive else { return }
         isDisplayActive = isActive

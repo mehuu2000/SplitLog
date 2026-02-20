@@ -40,6 +40,9 @@ struct SessionPopoverView: View {
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
+    @State private var editingSessionID: UUID?
+    @State private var editingSessionTitleDraft = ""
+    @State private var editingSessionTitleFocusToken: Int = 0
     @State private var isShowingResetConfirmation = false
     @State private var isShowingDeleteSessionConfirmation = false
     @State private var isShowingSessionOverflowList = false
@@ -100,10 +103,38 @@ struct SessionPopoverView: View {
 
                 Divider()
 
-                StatusRowView(
-                    title: "全体経過",
-                    value: formatDuration(seconds: totalElapsedSeconds)
-                )
+                HStack(spacing: 10) {
+                    if isEditingSelectedSessionTitle {
+                        InlineLapLabelEditor(
+                            text: $editingSessionTitleDraft,
+                            focusToken: editingSessionTitleFocusToken,
+                            fontSize: 14,
+                            fontWeight: .semibold,
+                            onCommit: commitSessionTitleEdit
+                        )
+                        .frame(minWidth: 120, maxWidth: 230, alignment: .leading)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.9))
+                        )
+                    } else {
+                        Text(selectedSessionTitleText)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(stopwatch.session == nil ? .secondary : .primary)
+                            .contentShape(Rectangle())
+                            .onTapGesture(perform: beginSessionTitleEdit)
+                    }
+
+                    Spacer()
+
+                    Text("全体経過")
+                        .foregroundStyle(.secondary)
+                    Text(formatDuration(seconds: totalElapsedSeconds))
+                        .monospacedDigit()
+                }
+                .font(.body)
 
                 HStack(alignment: .top, spacing: 16) {
                     SessionTimelineRingView(
@@ -242,7 +273,7 @@ struct SessionPopoverView: View {
             stopwatch.setDisplayActive(true)
         }
         .onDisappear {
-            commitActiveLapLabelEditIfNeeded()
+            commitPendingInlineEdits()
             commitActiveLapMemoEditIfNeeded()
             stopwatch.setDisplayActive(false)
         }
@@ -251,6 +282,15 @@ struct SessionPopoverView: View {
     private var memoEditingLap: WorkLap? {
         guard let memoEditingLapID else { return nil }
         return stopwatch.laps.first(where: { $0.id == memoEditingLapID })
+    }
+
+    private var selectedSessionTitleText: String {
+        stopwatch.session?.title ?? "セッション未選択"
+    }
+
+    private var isEditingSelectedSessionTitle: Bool {
+        guard let editingSessionID, let selectedSessionID = stopwatch.selectedSessionID else { return false }
+        return editingSessionID == selectedSessionID
     }
 
     private var subtitleText: String {
@@ -285,7 +325,7 @@ struct SessionPopoverView: View {
     }
 
     private func handlePrimaryAction() {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
 
         if stopwatch.state == .stopped {
             stopwatch.resumeSession()
@@ -301,22 +341,22 @@ struct SessionPopoverView: View {
     }
 
     private func handleFinishLap() {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.finishLap()
     }
 
     private func handleAddSession() {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.addSession()
     }
 
     private func handleSelectSession(sessionID: UUID) {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.selectSession(sessionID: sessionID)
     }
 
     private func handleSelectLap(lapID: UUID) {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.selectLap(lapID: lapID)
     }
 
@@ -331,12 +371,12 @@ struct SessionPopoverView: View {
     }
 
     private func handleReset() {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.resetSelectedSession()
     }
 
     private func handleDeleteSession() {
-        commitActiveLapLabelEditIfNeeded()
+        commitPendingInlineEdits()
         stopwatch.deleteSelectedSession()
     }
 
@@ -363,8 +403,33 @@ struct SessionPopoverView: View {
         commitLapLabelEdit(lapID: lapID)
     }
 
-    private func beginLapMemoEdit(for lap: WorkLap) {
+    private func beginSessionTitleEdit() {
+        guard let session = stopwatch.session else { return }
         commitActiveLapLabelEditIfNeeded()
+        editingSessionID = session.id
+        editingSessionTitleDraft = session.title
+        editingSessionTitleFocusToken += 1
+    }
+
+    private func commitSessionTitleEdit() {
+        guard let sessionID = editingSessionID else { return }
+        stopwatch.updateSessionTitle(sessionID: sessionID, title: editingSessionTitleDraft)
+        editingSessionID = nil
+        editingSessionTitleDraft = ""
+    }
+
+    private func commitActiveSessionTitleEditIfNeeded() {
+        guard editingSessionID != nil else { return }
+        commitSessionTitleEdit()
+    }
+
+    private func commitPendingInlineEdits() {
+        commitActiveLapLabelEditIfNeeded()
+        commitActiveSessionTitleEditIfNeeded()
+    }
+
+    private func beginLapMemoEdit(for lap: WorkLap) {
+        commitPendingInlineEdits()
         memoEditingLapID = lap.id
         memoLapLabelDraft = lap.label
         memoLapTextDraft = lap.memo

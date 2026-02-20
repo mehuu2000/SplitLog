@@ -11,7 +11,23 @@ import SwiftUI
 struct InlineLapLabelEditor: NSViewRepresentable {
     @Binding var text: String
     let focusToken: Int
+    let fontSize: CGFloat
+    let fontWeight: NSFont.Weight
     let onCommit: () -> Void
+
+    init(
+        text: Binding<String>,
+        focusToken: Int,
+        fontSize: CGFloat = NSFont.systemFontSize,
+        fontWeight: NSFont.Weight = .medium,
+        onCommit: @escaping () -> Void
+    ) {
+        _text = text
+        self.focusToken = focusToken
+        self.fontSize = fontSize
+        self.fontWeight = fontWeight
+        self.onCommit = onCommit
+    }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: InlineLapLabelEditor
@@ -132,7 +148,7 @@ struct InlineLapLabelEditor: NSViewRepresentable {
         field.maximumNumberOfLines = 1
         field.usesSingleLineMode = true
         field.lineBreakMode = .byTruncatingTail
-        field.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        field.font = NSFont.systemFont(ofSize: fontSize, weight: fontWeight)
         field.textColor = .black
         context.coordinator.textField = field
         return field
@@ -144,6 +160,11 @@ struct InlineLapLabelEditor: NSViewRepresentable {
 
         if nsView.currentEditor() == nil, nsView.stringValue != text {
             nsView.stringValue = text
+        }
+
+        let targetFont = NSFont.systemFont(ofSize: fontSize, weight: fontWeight)
+        if nsView.font != targetFont {
+            nsView.font = targetFont
         }
 
         context.coordinator.requestInitialFocusIfNeeded(on: nsView, token: focusToken)
