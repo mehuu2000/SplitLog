@@ -51,9 +51,11 @@ struct SessionPopoverView: View {
     @State private var isShowingDeleteSessionConfirmation = false
     @State private var isShowingSessionOverflowList = false
     @State private var isShowingSettingsModal = false
+    @State private var isShowingSessionSummaryModal = false
     @State private var memoEditingLapID: UUID?
     @State private var memoLapLabelDraft = ""
     @State private var memoLapTextDraft = ""
+    @State private var sessionSummaryDraft = ""
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
     private let sessionTitleAreaWidth: CGFloat = 250
@@ -184,27 +186,27 @@ struct SessionPopoverView: View {
 
                 HStack(spacing: 10) {
                     if showTimelineRing {
-                        if isEditingSelectedSessionTitle {
-                            sessionTitleEditingView
-                        } else {
-                            sessionTitleDisplayView
-                        }
+                        sessionTitleSection
 
                         Spacer()
+                        sessionSummaryButton(
+                            lapDisplayedSeconds: lapDisplayedSeconds,
+                            totalElapsedSeconds: totalElapsedSeconds
+                        )
                         Text("全体経過")
                             .foregroundStyle(colorResolver.subtitleTextColor)
                         Text(formatDuration(seconds: totalElapsedSeconds))
                             .monospacedDigit()
                     } else {
-                        if isEditingSelectedSessionTitle {
-                            sessionTitleEditingView
-                        } else {
-                            sessionTitleDisplayView
-                        }
+                        sessionTitleSection
 
                         Spacer(minLength: 8)
 
                         HStack(spacing: 6) {
+                            sessionSummaryButton(
+                                lapDisplayedSeconds: lapDisplayedSeconds,
+                                totalElapsedSeconds: totalElapsedSeconds
+                            )
                             Text("全体経過")
                                 .foregroundStyle(colorResolver.subtitleTextColor)
                             Text(formatDuration(seconds: totalElapsedSeconds))
@@ -379,6 +381,16 @@ struct SessionPopoverView: View {
                 )
             }
 
+            if isShowingSessionSummaryModal {
+                SessionSummaryOverlayView(
+                    summaryText: $sessionSummaryDraft,
+                    onCopy: copySessionSummaryToPasteboard,
+                    onClose: {
+                        isShowingSessionSummaryModal = false
+                    }
+                )
+            }
+
             if isShowingSettingsModal {
                 SessionSettingsOverlayView(
                     settingsStore: appSettingsStore,
@@ -447,6 +459,42 @@ struct SessionPopoverView: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture(perform: beginSessionTitleEdit)
+    }
+
+    @ViewBuilder
+    private var sessionTitleSection: some View {
+        Group {
+            if isEditingSelectedSessionTitle {
+                sessionTitleEditingView
+            } else {
+                sessionTitleDisplayView
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionSummaryButton(
+        lapDisplayedSeconds: [UUID: Int],
+        totalElapsedSeconds: Int
+    ) -> some View {
+        Button {
+            openSessionSummary(
+                lapDisplayedSeconds: lapDisplayedSeconds,
+                totalElapsedSeconds: totalElapsedSeconds
+            )
+        } label: {
+            Image(systemName: "doc.text")
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle()
+                        .fill(colorResolver.headerControlBackground)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("セッションまとめ")
+        .accessibilityLabel("セッションまとめ")
+        .disabled(stopwatch.session == nil)
     }
 
     @ViewBuilder
@@ -621,6 +669,58 @@ struct SessionPopoverView: View {
         memoEditingLapID = lap.id
         memoLapLabelDraft = lap.label
         memoLapTextDraft = lap.memo
+    }
+
+    private func openSessionSummary(
+        lapDisplayedSeconds: [UUID: Int],
+        totalElapsedSeconds: Int
+    ) {
+        commitPendingInlineEdits()
+        commitActiveLapMemoEditIfNeeded()
+        sessionSummaryDraft = buildSessionSummaryText(
+            lapDisplayedSeconds: lapDisplayedSeconds,
+            totalElapsedSeconds: totalElapsedSeconds
+        )
+        isShowingSessionSummaryModal = true
+    }
+
+    private func copySessionSummaryToPasteboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(sessionSummaryDraft, forType: .string)
+    }
+
+    private func buildSessionSummaryText(
+        lapDisplayedSeconds: [UUID: Int],
+        totalElapsedSeconds: Int
+    ) -> String {
+        guard let session = stopwatch.session else { return "" }
+
+        var lines: [String] = []
+        lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds)))】")
+
+        if stopwatch.laps.isEmpty {
+            lines.append("・ラップはまだありません")
+            return lines.joined(separator: "\n")
+        }
+
+        for lap in stopwatch.laps {
+            let elapsedSeconds = lapDisplayedSeconds[lap.id] ?? durationSeconds(stopwatch.elapsedLap(lap))
+            lines.append("・\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds)))")
+            let trimmedMemo = lap.memo.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedMemo.isEmpty {
+                lines.append(lap.memo)
+            }
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func summaryDurationText(seconds: Int) -> String {
+        let roundedTotalMinutes = max(0, (seconds + 30) / 60)
+        let hours = roundedTotalMinutes / 60
+        let minutes = roundedTotalMinutes % 60
+        return "\(hours)時間\(minutes)分"
     }
 
     private func commitLapMemoEdit() {
