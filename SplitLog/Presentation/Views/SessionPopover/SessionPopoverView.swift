@@ -455,12 +455,15 @@ struct SessionPopoverView: View {
         .tint(colorResolver.controlTint)
         .background(.regularMaterial)
         .onAppear {
-            stopwatch.setDisplayActive(true)
+            stopwatch.setDisplayActive(true, showTimelineRing: showTimelineRing)
         }
         .onDisappear {
             commitPendingInlineEdits()
             commitActiveLapMemoEditIfNeeded()
-            stopwatch.setDisplayActive(false)
+            stopwatch.setDisplayActive(false, showTimelineRing: showTimelineRing)
+        }
+        .onChange(of: appSettingsStore.showTimelineRing) { _, isVisible in
+            stopwatch.setDisplayActive(true, showTimelineRing: isVisible)
         }
         .onReceive(stopwatch.$persistenceErrorEvent.compactMap { $0 }) { event in
             showToast(event.message, style: .error)

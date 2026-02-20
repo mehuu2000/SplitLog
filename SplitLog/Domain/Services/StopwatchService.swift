@@ -27,9 +27,11 @@ final class StopwatchService: ObservableObject {
 
     private var timerCancellable: AnyCancellable?
     private let autoTick: Bool
-    private let foregroundClockUpdateInterval: TimeInterval = 1.0 / 60.0
+    private let foregroundClockUpdateIntervalWithRing: TimeInterval = 1.0 / 15.0
+    private let foregroundClockUpdateIntervalWithoutRing: TimeInterval = 1.0 / 5.0
     private let backgroundClockUpdateInterval: TimeInterval = 1.0
     private var isDisplayActive: Bool = false
+    private var isTimelineRingVisible: Bool = true
 
     private var sessionContexts: [UUID: SessionContext] = [:]
     private var sessionOrder: [UUID] = []
@@ -376,8 +378,15 @@ final class StopwatchService: ObservableObject {
     }
 
     func setDisplayActive(_ isActive: Bool) {
-        guard isDisplayActive != isActive else { return }
+        setDisplayActive(isActive, showTimelineRing: isTimelineRingVisible)
+    }
+
+    func setDisplayActive(_ isActive: Bool, showTimelineRing: Bool) {
+        let activityDidChange = isDisplayActive != isActive
+        let ringVisibilityDidChange = isTimelineRingVisible != showTimelineRing
+        guard activityDidChange || ringVisibilityDidChange else { return }
         isDisplayActive = isActive
+        isTimelineRingVisible = showTimelineRing
         syncTimerForSelectedState()
     }
 
@@ -651,7 +660,14 @@ final class StopwatchService: ObservableObject {
     }
 
     private func startClock() {
-        let interval = isDisplayActive ? foregroundClockUpdateInterval : backgroundClockUpdateInterval
+        let interval: TimeInterval
+        if isDisplayActive {
+            interval = isTimelineRingVisible
+                ? foregroundClockUpdateIntervalWithRing
+                : foregroundClockUpdateIntervalWithoutRing
+        } else {
+            interval = backgroundClockUpdateInterval
+        }
         stopClock()
         timerCancellable = Timer
             .publish(every: interval, tolerance: interval * 0.25, on: .main, in: .common)
