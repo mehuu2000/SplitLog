@@ -34,6 +34,14 @@ struct SplitLogTests {
         return "\(year)/\(month)/\(day)"
     }
 
+    private func makeIsolatedUserDefaults() -> (userDefaults: UserDefaults, suiteName: String) {
+        let suiteName = "SplitLogTests.\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: suiteName) else {
+            fatalError("failed to create isolated UserDefaults suite")
+        }
+        return (userDefaults, suiteName)
+    }
+
     @MainActor
     @Test func startSession_startsRunningStateWithFirstLap() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
@@ -516,7 +524,7 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func updateLapMemo_persistsAndRestoresMemoText() {
+    @Test func updateLapMemo_persistsAndRestoresMemoText() throws {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let memo = "次回はここから再開"
@@ -531,7 +539,7 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func updateSessionTitle_persistsAndRestoresTitle() {
+    @Test func updateSessionTitle_persistsAndRestoresTitle() throws {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
         let title = "朝の集中作業"
@@ -647,6 +655,73 @@ struct SplitLogTests {
         #expect(restored.state == .running)
         #expect(restored.laps.count == 3)
         #expect(restored.currentLap?.index == 3)
+    }
+
+    @MainActor
+    @Test func appSettingsStore_withoutStoredValue_usesDefaults() {
+        let isolated = makeIsolatedUserDefaults()
+        defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
+
+        let store = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: "app_settings_test")
+
+        #expect(store.themeMode == .color)
+        #expect(store.showTimelineRing == true)
+        #expect(store.settings == .default)
+    }
+
+    @MainActor
+    @Test func appSettingsStore_themeMode_isPersistedAndRestored() throws {
+        let isolated = makeIsolatedUserDefaults()
+        defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
+        let storageKey = "app_settings_test"
+
+        let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        source.setThemeMode(.monochrome)
+
+        let storedData = try #require(isolated.userDefaults.data(forKey: storageKey))
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
+        #expect(decoded.themeMode == .monochrome)
+        #expect(decoded.showTimelineRing == true)
+
+        let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        #expect(restored.themeMode == .monochrome)
+        #expect(restored.showTimelineRing == true)
+    }
+
+    @MainActor
+    @Test func appSettingsStore_showTimelineRing_isPersistedAndRestored() throws {
+        let isolated = makeIsolatedUserDefaults()
+        defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
+        let storageKey = "app_settings_test"
+
+        let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        source.setShowTimelineRing(false)
+
+        let storedData = try #require(isolated.userDefaults.data(forKey: storageKey))
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
+        #expect(decoded.showTimelineRing == false)
+        #expect(decoded.themeMode == .color)
+
+        let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        #expect(restored.showTimelineRing == false)
+        #expect(restored.themeMode == .color)
+    }
+
+    @MainActor
+    @Test func appSettingsStore_update_reflectsBothSettingsAndPersists() {
+        let isolated = makeIsolatedUserDefaults()
+        defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
+        let storageKey = "app_settings_test"
+
+        let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        source.update(AppSettings(themeMode: .monochrome, showTimelineRing: false))
+
+        #expect(source.themeMode == .monochrome)
+        #expect(source.showTimelineRing == false)
+
+        let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        #expect(restored.themeMode == .monochrome)
+        #expect(restored.showTimelineRing == false)
     }
 
 }
