@@ -52,6 +52,8 @@ struct SessionPopoverView: View {
     @State private var memoLapTextDraft = ""
     // Temporary for UI verification: 1 ring = 30 seconds (instead of 12 hours)
     private let ringBlockDuration: TimeInterval = 30
+    private let sessionTitleAreaWidth: CGFloat = 250
+    private let sessionTitleAreaHeight: CGFloat = 28
 
     init(stopwatch: StopwatchService) {
         _stopwatch = StateObject(wrappedValue: stopwatch)
@@ -105,35 +107,11 @@ struct SessionPopoverView: View {
                 Divider()
 
                 HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if isEditingSelectedSessionTitle {
-                            InlineLapLabelEditor(
-                                text: $editingSessionTitleDraft,
-                                focusToken: editingSessionTitleFocusToken,
-                                fontSize: 14,
-                                fontWeight: .semibold,
-                                onCommit: commitSessionTitleEdit
-                            )
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.white.opacity(0.9))
-                            )
-                        } else {
-                            Text(selectedSessionTitleText)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(stopwatch.session == nil ? .secondary : .primary)
-                                .contentShape(Rectangle())
-                                .onTapGesture(perform: beginSessionTitleEdit)
-                        }
-
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.22))
-                            .frame(width: sessionTitleUnderlineWidth)
-                            .frame(height: 1)
+                    if isEditingSelectedSessionTitle {
+                        sessionTitleEditingView
+                    } else {
+                        sessionTitleDisplayView
                     }
-                    .frame(maxWidth: 230, alignment: .leading)
 
                     Spacer()
 
@@ -302,12 +280,58 @@ struct SessionPopoverView: View {
         let fontSize: CGFloat = isEditingSelectedSessionTitle ? 14 : 16
         let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
         let measuredWidth = (text as NSString).size(withAttributes: [.font: font]).width
-        return min(230, max(32, ceil(measuredWidth) + 4))
+        return max(32, ceil(measuredWidth) + 4)
     }
 
     private var isEditingSelectedSessionTitle: Bool {
         guard let editingSessionID, let selectedSessionID = stopwatch.selectedSessionID else { return false }
         return editingSessionID == selectedSessionID
+    }
+
+    private var sessionTitleDisplayView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectedSessionTitleText)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(stopwatch.session == nil ? .secondary : .primary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Rectangle()
+                    .fill(Color.primary.opacity(0.22))
+                    .frame(width: sessionTitleUnderlineWidth)
+                    .frame(height: 1)
+            }
+        }
+        .frame(width: sessionTitleAreaWidth, height: sessionTitleAreaHeight, alignment: .leading)
+        .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture(perform: beginSessionTitleEdit)
+    }
+
+    private var sessionTitleEditingView: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            InlineLapLabelEditor(
+                text: $editingSessionTitleDraft,
+                focusToken: editingSessionTitleFocusToken,
+                fontSize: 14,
+                fontWeight: .semibold,
+                onCommit: commitSessionTitleEdit
+            )
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.white.opacity(0.9))
+            )
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.22))
+                .frame(width: sessionTitleUnderlineWidth)
+                .frame(height: 1)
+        }
+        .frame(width: sessionTitleAreaWidth, height: sessionTitleAreaHeight, alignment: .leading)
+        .clipped()
     }
 
     private var subtitleText: String {

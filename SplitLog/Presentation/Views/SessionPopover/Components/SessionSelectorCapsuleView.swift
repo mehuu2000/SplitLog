@@ -58,14 +58,14 @@ struct SessionSelectorCapsuleView: View {
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: 64, height: 22)
+                .frame(width: 74, height: 22)
                 .background(
                     Capsule()
                         .fill(isSelected ? Color.primary.opacity(0.14) : Color.clear)
                 )
         }
         .buttonStyle(.plain)
-        .frame(width: 64)
+        .frame(width: 74)
     }
 
     private var overflowButton: some View {
