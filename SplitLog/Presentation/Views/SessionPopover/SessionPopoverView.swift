@@ -548,8 +548,8 @@ struct SessionPopoverView: View {
                 )
         }
         .buttonStyle(.plain)
-        .help("セッションまとめ")
-        .accessibilityLabel("セッションまとめ")
+        .help("サマリー")
+        .accessibilityLabel("サマリー")
         .disabled(stopwatch.session == nil)
     }
 
@@ -876,9 +876,9 @@ struct SessionPopoverView: View {
         pasteboard.clearContents()
         let didCopy = pasteboard.setString(sessionSummaryDraft, forType: .string)
         if didCopy {
-            showToast("セッションまとめをコピーしました")
+            showToast("サマリーをコピーしました")
         } else {
-            showToast("セッションまとめのコピーに失敗しました。", style: .error)
+            showToast("サマリーのコピーに失敗しました。", style: .error)
         }
     }
 

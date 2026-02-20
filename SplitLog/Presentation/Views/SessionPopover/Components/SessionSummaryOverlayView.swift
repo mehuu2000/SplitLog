@@ -24,7 +24,7 @@ struct SessionSummaryOverlayView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("セッションまとめ")
+                    Text("サマリー")
                         .font(.headline)
 
                     Button(action: onToggleMemoFormat) {
