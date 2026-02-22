@@ -574,7 +574,7 @@ struct SessionPopoverView: View {
     }
 
     private var ringBlockDuration: TimeInterval {
-        30
+        TimeInterval(max(1, appSettingsStore.timelineRingHoursPerCycle)) * 60 * 60
     }
 
     private var selectedSessionTitleText: String {
