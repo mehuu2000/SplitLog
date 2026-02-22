@@ -28,6 +28,8 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
     var state: SessionState
     var pauseStartedAt: Date?
     var lastLapActivationAt: Date?
+    var lastDistributedWholeSeconds: Int
+    var distributionCursor: Int
     var totalPausedDuration: TimeInterval
     var completedPauseIntervals: [DateInterval]
 
@@ -39,6 +41,8 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         state: SessionState,
         pauseStartedAt: Date?,
         lastLapActivationAt: Date?,
+        lastDistributedWholeSeconds: Int,
+        distributionCursor: Int,
         totalPausedDuration: TimeInterval,
         completedPauseIntervals: [DateInterval]
     ) {
@@ -49,6 +53,8 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         self.state = state
         self.pauseStartedAt = pauseStartedAt
         self.lastLapActivationAt = lastLapActivationAt
+        self.lastDistributedWholeSeconds = max(0, lastDistributedWholeSeconds)
+        self.distributionCursor = max(0, distributionCursor)
         self.totalPausedDuration = totalPausedDuration
         self.completedPauseIntervals = completedPauseIntervals
     }
@@ -61,6 +67,8 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         case state
         case pauseStartedAt
         case lastLapActivationAt
+        case lastDistributedWholeSeconds
+        case distributionCursor
         case totalPausedDuration
         case completedPauseIntervals
     }
@@ -74,6 +82,14 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         state = try container.decode(SessionState.self, forKey: .state)
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         lastLapActivationAt = try container.decodeIfPresent(Date.self, forKey: .lastLapActivationAt)
+        let legacyDistributedFallback = Int(floor(laps.reduce(0) { partial, lap in
+            partial + max(0, lap.accumulatedDuration)
+        }))
+        lastDistributedWholeSeconds = max(
+            0,
+            try container.decodeIfPresent(Int.self, forKey: .lastDistributedWholeSeconds) ?? legacyDistributedFallback
+        )
+        distributionCursor = max(0, try container.decodeIfPresent(Int.self, forKey: .distributionCursor) ?? 0)
         completedPauseIntervals = try container.decodeIfPresent([DateInterval].self, forKey: .completedPauseIntervals) ?? []
 
         if let totalPausedDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .totalPausedDuration) {

@@ -55,7 +55,8 @@ final class StopwatchService: ObservableObject {
         var activeLapIDs: Set<UUID>
         var state: SessionState
         var pauseStartedAt: Date?
-        var lastLapActivationAt: Date?
+        var lastDistributedWholeSeconds: Int
+        var distributionCursor: Int
         var totalPausedDuration: TimeInterval
     }
 
@@ -134,21 +135,29 @@ final class StopwatchService: ObservableObject {
             var context = sessionContexts[selectedSessionID],
             context.state == .running
         {
-            accumulateActiveDuration(in: &context, until: date)
+            distributePendingWholeSeconds(in: &context, until: date, mode: splitAccumulationMode)
             sessionContexts[selectedSessionID] = context
         }
 
+        let previousMode = splitAccumulationMode
         splitAccumulationMode = mode
 
         if let selectedSessionID, var context = sessionContexts[selectedSessionID] {
+            let previousOrder = distributionOrder(in: context, mode: previousMode)
             context.activeLapIDs = normalizedActiveLapIDs(
                 context.activeLapIDs,
                 in: context.laps,
                 selectedLapID: context.selectedLapID,
                 mode: mode
             )
+            let newOrder = distributionOrder(in: context, mode: mode)
+            context.distributionCursor = rebasedDistributionCursor(
+                previousOrder: previousOrder,
+                newOrder: newOrder,
+                previousCursor: context.distributionCursor
+            )
             if context.state == .running {
-                context.lastLapActivationAt = date
+                context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: date)
             }
             commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
         } else {
@@ -167,9 +176,10 @@ final class StopwatchService: ObservableObject {
         }
 
         if context.state == .running {
-            accumulateActiveDuration(in: &context, until: date)
+            distributePendingWholeSeconds(in: &context, until: date)
         }
 
+        let previousOrder = distributionOrder(in: context, mode: .checkbox)
         var activeLapIDs = normalizedActiveLapIDs(
             context.activeLapIDs,
             in: context.laps,
@@ -180,7 +190,7 @@ final class StopwatchService: ObservableObject {
         if activeLapIDs.contains(lapID) {
             guard activeLapIDs.count > 1 else {
                 if context.state == .running {
-                    context.lastLapActivationAt = date
+                    context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: date)
                 }
                 commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
                 return
@@ -191,8 +201,14 @@ final class StopwatchService: ObservableObject {
         }
 
         context.activeLapIDs = activeLapIDs
+        let newOrder = distributionOrder(in: context, mode: .checkbox)
+        context.distributionCursor = rebasedDistributionCursor(
+            previousOrder: previousOrder,
+            newOrder: newOrder,
+            previousCursor: context.distributionCursor
+        )
         if context.state == .running {
-            context.lastLapActivationAt = date
+            context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: date)
         }
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
@@ -241,7 +257,8 @@ final class StopwatchService: ObservableObject {
             return
         }
 
-        accumulateActiveDuration(in: &context, until: date)
+        distributePendingWholeSeconds(in: &context, until: date)
+        let previousOrder = distributionOrder(in: context)
         if context.laps[currentIndex].endedAt == nil {
             context.laps[currentIndex].endedAt = date
         }
@@ -261,6 +278,7 @@ final class StopwatchService: ObservableObject {
         switch splitAccumulationMode {
         case .radio:
             context.activeLapIDs = [nextLap.id]
+            context.distributionCursor = 0
         case .checkbox:
             // Keep every currently checked split as-is, then include the newly created split.
             // This prevents implicit unchecking when creating a new split in checkbox mode.
@@ -271,8 +289,14 @@ final class StopwatchService: ObservableObject {
             }
             activeLapIDs.insert(nextLap.id)
             context.activeLapIDs = activeLapIDs
+            let newOrder = distributionOrder(in: context, mode: .checkbox)
+            context.distributionCursor = rebasedDistributionCursor(
+                previousOrder: previousOrder,
+                newOrder: newOrder,
+                previousCursor: context.distributionCursor
+            )
         }
-        context.lastLapActivationAt = date
+        context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: date)
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
@@ -288,22 +312,31 @@ final class StopwatchService: ObservableObject {
         }
 
         if context.state == .running {
-            accumulateActiveDuration(in: &context, until: date)
+            distributePendingWholeSeconds(in: &context, until: date)
             context.selectedLapID = lapID
             if splitAccumulationMode == .radio {
                 context.activeLapIDs = [lapID]
+                context.distributionCursor = 0
             }
-            context.lastLapActivationAt = date
+            context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: date)
         } else if context.state == .paused || context.state == .stopped {
             context.selectedLapID = lapID
             if splitAccumulationMode == .radio {
                 context.activeLapIDs = [lapID]
+                context.distributionCursor = 0
             } else {
+                let previousOrder = distributionOrder(in: context, mode: .checkbox)
                 context.activeLapIDs = normalizedActiveLapIDs(
                     context.activeLapIDs,
                     in: context.laps,
                     selectedLapID: context.selectedLapID,
                     mode: .checkbox
+                )
+                let newOrder = distributionOrder(in: context, mode: .checkbox)
+                context.distributionCursor = rebasedDistributionCursor(
+                    previousOrder: previousOrder,
+                    newOrder: newOrder,
+                    previousCursor: context.distributionCursor
                 )
             }
         } else {
@@ -322,10 +355,9 @@ final class StopwatchService: ObservableObject {
             return
         }
 
-        accumulateActiveDuration(in: &context, until: date)
+        distributePendingWholeSeconds(in: &context, until: date)
         context.state = .paused
         context.pauseStartedAt = date
-        context.lastLapActivationAt = nil
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
@@ -359,12 +391,11 @@ final class StopwatchService: ObservableObject {
             stoppedAt = pausedAt
         } else {
             stoppedAt = date
-            accumulateActiveDuration(in: &context, until: stoppedAt)
+            distributePendingWholeSeconds(in: &context, until: stoppedAt)
             context.pauseStartedAt = stoppedAt
         }
 
         context.state = .stopped
-        context.lastLapActivationAt = nil
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: stoppedAt)
     }
@@ -398,7 +429,8 @@ final class StopwatchService: ObservableObject {
         context.selectedLapID = nil
         context.activeLapIDs = []
         context.pauseStartedAt = nil
-        context.lastLapActivationAt = nil
+        context.lastDistributedWholeSeconds = 0
+        context.distributionCursor = 0
         context.totalPausedDuration = 0
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
@@ -420,7 +452,8 @@ final class StopwatchService: ObservableObject {
             context.selectedLapID = nil
             context.activeLapIDs = []
             context.pauseStartedAt = nil
-            context.lastLapActivationAt = nil
+            context.lastDistributedWholeSeconds = 0
+            context.distributionCursor = 0
             context.totalPausedDuration = 0
             sessionContexts[sessionID] = context
         }
@@ -526,10 +559,9 @@ final class StopwatchService: ObservableObject {
 
         for sessionID in sessionOrder {
             guard var context = sessionContexts[sessionID], context.state == .running else { continue }
-            accumulateActiveDuration(in: &context, until: date)
+            distributePendingWholeSeconds(in: &context, until: date)
             context.state = .stopped
             context.pauseStartedAt = date
-            context.lastLapActivationAt = nil
             sessionContexts[sessionID] = context
         }
 
@@ -647,7 +679,8 @@ final class StopwatchService: ObservableObject {
             activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
-            lastLapActivationAt: nil,
+            lastDistributedWholeSeconds: 0,
+            distributionCursor: 0,
             totalPausedDuration: 0
         )
     }
@@ -670,17 +703,17 @@ final class StopwatchService: ObservableObject {
         context.activeLapIDs = [initialLap.id]
         context.state = .running
         context.pauseStartedAt = nil
-        context.lastLapActivationAt = date
+        context.lastDistributedWholeSeconds = 0
+        context.distributionCursor = 0
         context.totalPausedDuration = 0
     }
 
     private func stopRunningSessions(except keepSessionID: UUID?, at date: Date) {
         for id in sessionOrder {
             guard id != keepSessionID, var context = sessionContexts[id], context.state == .running else { continue }
-            accumulateActiveDuration(in: &context, until: date)
+            distributePendingWholeSeconds(in: &context, until: date)
             context.state = .stopped
             context.pauseStartedAt = date
-            context.lastLapActivationAt = nil
             sessionContexts[id] = context
         }
     }
@@ -692,7 +725,9 @@ final class StopwatchService: ObservableObject {
         context.totalPausedDuration += max(0, resumedAt.timeIntervalSince(pausedAt))
         context.pauseStartedAt = nil
         context.state = .running
-        context.lastLapActivationAt = resumedAt
+        context.lastDistributedWholeSeconds = wholeElapsedSeconds(in: context, at: resumedAt)
+        let order = distributionOrder(in: context)
+        context.distributionCursor = normalizedDistributionCursor(context.distributionCursor, count: order.count)
     }
 
     private func defaultLapLabel(for index: Int) -> String {
@@ -775,23 +810,6 @@ final class StopwatchService: ObservableObject {
         return result > 0 ? result : nil
     }
 
-    private func accumulateActiveDuration(in context: inout SessionContext, until date: Date) {
-        guard context.state == .running else { return }
-        guard let lastLapActivationAt = context.lastLapActivationAt else { return }
-        guard date > lastLapActivationAt else { return }
-        let activeLapIDs = activeLapIDsForAccumulation(in: context)
-        guard !activeLapIDs.isEmpty else { return }
-
-        let delta = date.timeIntervalSince(lastLapActivationAt)
-        let share = delta / Double(activeLapIDs.count)
-
-        for activeLapID in activeLapIDs {
-            guard let lapIndex = context.laps.firstIndex(where: { $0.id == activeLapID }) else { continue }
-            context.laps[lapIndex].accumulatedDuration += share
-        }
-        context.lastLapActivationAt = date
-    }
-
     private func elapsedSession(in context: SessionContext, at referenceDate: Date) -> TimeInterval {
         if context.laps.isEmpty {
             return 0
@@ -802,22 +820,92 @@ final class StopwatchService: ObservableObject {
     }
 
     private func elapsedLap(_ lap: WorkLap, in context: SessionContext, at referenceDate: Date) -> TimeInterval {
-        var elapsed = max(0, lap.accumulatedDuration)
-        guard context.state == .running, let lastLapActivationAt = context.lastLapActivationAt else {
-            return elapsed
-        }
-        let activeLapIDs = activeLapIDsForAccumulation(in: context)
-        guard activeLapIDs.contains(lap.id), !activeLapIDs.isEmpty else {
-            return elapsed
-        }
+        var elapsed = max(0, floor(lap.accumulatedDuration))
+        guard context.state == .running else { return elapsed }
 
-        let delta = max(0, referenceDate.timeIntervalSince(lastLapActivationAt))
-        elapsed += delta / Double(activeLapIDs.count)
-        return max(0, elapsed)
+        let pending = pendingDistribution(in: context, at: referenceDate)
+        guard pending.delta > 0 else { return elapsed }
+        guard let targetIndex = pending.order.firstIndex(of: lap.id) else { return elapsed }
+
+        elapsed += TimeInterval(pending.hitCount(for: targetIndex))
+        return elapsed
     }
 
-    private func activeLapIDsForAccumulation(in context: SessionContext) -> [UUID] {
-        switch splitAccumulationMode {
+    private struct PendingDistribution {
+        let order: [UUID]
+        let cursor: Int
+        let delta: Int
+        let currentWhole: Int
+
+        func hitCount(for targetIndex: Int) -> Int {
+            guard delta > 0, !order.isEmpty else { return 0 }
+            guard targetIndex >= 0, targetIndex < order.count else { return 0 }
+
+            let count = order.count
+            let fullCycles = delta / count
+            let remainder = delta % count
+            let offset = (targetIndex - cursor + count) % count
+            return fullCycles + (offset < remainder ? 1 : 0)
+        }
+
+        var nextCursor: Int {
+            guard !order.isEmpty else { return 0 }
+            return (cursor + (delta % order.count)) % order.count
+        }
+    }
+
+    private func pendingDistribution(
+        in context: SessionContext,
+        at date: Date,
+        mode: SplitAccumulationMode? = nil
+    ) -> PendingDistribution {
+        let effectiveMode = mode ?? splitAccumulationMode
+        let currentWhole = wholeElapsedSeconds(in: context, at: date)
+        let delta = max(0, currentWhole - context.lastDistributedWholeSeconds)
+        let order = distributionOrder(in: context, mode: effectiveMode)
+        let cursor = normalizedDistributionCursor(context.distributionCursor, count: order.count)
+        return PendingDistribution(order: order, cursor: cursor, delta: delta, currentWhole: currentWhole)
+    }
+
+    private func distributePendingWholeSeconds(
+        in context: inout SessionContext,
+        until date: Date,
+        mode: SplitAccumulationMode? = nil
+    ) {
+        guard context.state == .running else { return }
+        let pending = pendingDistribution(in: context, at: date, mode: mode)
+        guard pending.delta > 0 else { return }
+        guard !pending.order.isEmpty else {
+            context.lastDistributedWholeSeconds = pending.currentWhole
+            context.distributionCursor = 0
+            return
+        }
+
+        var lapIndexByID: [UUID: Int] = [:]
+        lapIndexByID.reserveCapacity(context.laps.count)
+        for (index, lap) in context.laps.enumerated() {
+            lapIndexByID[lap.id] = index
+        }
+
+        for (index, lapID) in pending.order.enumerated() {
+            let increment = pending.hitCount(for: index)
+            guard increment > 0 else { continue }
+            guard let lapIndex = lapIndexByID[lapID] else { continue }
+            let base = floor(max(0, context.laps[lapIndex].accumulatedDuration))
+            context.laps[lapIndex].accumulatedDuration = base + TimeInterval(increment)
+        }
+
+        context.lastDistributedWholeSeconds = pending.currentWhole
+        context.distributionCursor = pending.nextCursor
+    }
+
+    private func wholeElapsedSeconds(in context: SessionContext, at date: Date) -> Int {
+        max(0, Int(floor(elapsedSession(in: context, at: date))))
+    }
+
+    private func distributionOrder(in context: SessionContext, mode: SplitAccumulationMode? = nil) -> [UUID] {
+        let effectiveMode = mode ?? splitAccumulationMode
+        switch effectiveMode {
         case .radio:
             guard
                 let selectedLapID = context.selectedLapID,
@@ -837,6 +925,27 @@ final class StopwatchService: ObservableObject {
                 normalized.contains(lap.id) ? lap.id : nil
             }
         }
+    }
+
+    private func normalizedDistributionCursor(_ cursor: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return ((cursor % count) + count) % count
+    }
+
+    private func rebasedDistributionCursor(
+        previousOrder: [UUID],
+        newOrder: [UUID],
+        previousCursor: Int
+    ) -> Int {
+        guard !newOrder.isEmpty else { return 0 }
+        guard !previousOrder.isEmpty else { return 0 }
+
+        let normalizedPreviousCursor = normalizedDistributionCursor(previousCursor, count: previousOrder.count)
+        let nextTargetID = previousOrder[normalizedPreviousCursor]
+        if let newIndex = newOrder.firstIndex(of: nextTargetID) {
+            return newIndex
+        }
+        return normalizedDistributionCursor(previousCursor, count: newOrder.count)
     }
 
     private func startClock() {
@@ -1035,35 +1144,62 @@ final class StopwatchService: ObservableObject {
     }
 
     private func persistedContext(from context: SessionContext) -> PersistedSessionContext {
-        PersistedSessionContext(
+        let normalizedLaps = context.laps.map { lap -> WorkLap in
+            var normalizedLap = lap
+            normalizedLap.accumulatedDuration = TimeInterval(max(0, Int(floor(lap.accumulatedDuration))))
+            return normalizedLap
+        }
+
+        return PersistedSessionContext(
             session: context.session,
-            laps: context.laps,
+            laps: normalizedLaps,
             selectedLapID: context.selectedLapID,
             activeLapIDs: context.activeLapIDs,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
-            lastLapActivationAt: context.lastLapActivationAt,
+            lastLapActivationAt: nil,
+            lastDistributedWholeSeconds: max(0, context.lastDistributedWholeSeconds),
+            distributionCursor: max(0, context.distributionCursor),
             totalPausedDuration: context.totalPausedDuration,
             completedPauseIntervals: []
         )
     }
 
     private func sessionContext(from context: PersistedSessionContext) -> SessionContext {
-        let selectedLapID = normalizedSelectedLapID(context.selectedLapID, in: context.laps)
+        let normalizedLaps = context.laps
+            .map { lap -> WorkLap in
+                var normalizedLap = lap
+                normalizedLap.accumulatedDuration = TimeInterval(max(0, Int(floor(lap.accumulatedDuration))))
+                return normalizedLap
+            }
+            .sorted(by: { $0.index < $1.index })
+        let selectedLapID = normalizedSelectedLapID(context.selectedLapID, in: normalizedLaps)
         let activeLapIDs = normalizedActiveLapIDs(
             context.activeLapIDs,
-            in: context.laps,
+            in: normalizedLaps,
             selectedLapID: selectedLapID,
             mode: .checkbox
         )
+        let distributedFromLaps = normalizedLaps.reduce(0) { partial, lap in
+            partial + max(0, Int(floor(lap.accumulatedDuration)))
+        }
+        let lastDistributedWholeSeconds = max(context.lastDistributedWholeSeconds, distributedFromLaps)
+        let distributionOrderCount = distributionOrder(
+            laps: normalizedLaps,
+            selectedLapID: selectedLapID,
+            activeLapIDs: activeLapIDs,
+            mode: .checkbox
+        ).count
+
         return SessionContext(
             session: context.session,
-            laps: context.laps,
+            laps: normalizedLaps,
             selectedLapID: selectedLapID,
             activeLapIDs: activeLapIDs,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
-            lastLapActivationAt: context.lastLapActivationAt,
+            lastDistributedWholeSeconds: lastDistributedWholeSeconds,
+            distributionCursor: normalizedDistributionCursor(context.distributionCursor, count: distributionOrderCount),
             totalPausedDuration: max(0, context.totalPausedDuration)
         )
     }
@@ -1126,42 +1262,20 @@ final class StopwatchService: ObservableObject {
         var normalizedContexts: [PersistedSessionContext] = []
         normalizedContexts.reserveCapacity(snapshot.contexts.count)
 
-        for persistedContext in snapshot.contexts {
-            var context = persistedContext
-            guard context.state == .running else {
-                normalizedContexts.append(context)
+        for persisted in snapshot.contexts {
+            guard persisted.state == .running else {
+                normalizedContexts.append(persisted)
                 continue
             }
 
             // If the app terminated without a normal stop event, treat launch time as stop time (MVP rule).
             let resolvedStopDate = max(snapshot.savedAt, restoreDate)
-
-            if
-                let lastLapActivationAt = context.lastLapActivationAt,
-                resolvedStopDate > lastLapActivationAt
-            {
-                let delta = resolvedStopDate.timeIntervalSince(lastLapActivationAt)
-                let normalizedActiveLapIDs = normalizedActiveLapIDs(
-                    context.activeLapIDs,
-                    in: context.laps,
-                    selectedLapID: context.selectedLapID,
-                    mode: .checkbox
-                )
-                let fallbackSelectedID = context.selectedLapID.map { [$0] } ?? []
-                let accumulationTargets = normalizedActiveLapIDs.isEmpty ? fallbackSelectedID : Array(normalizedActiveLapIDs)
-                if !accumulationTargets.isEmpty {
-                    let share = delta / Double(accumulationTargets.count)
-                    for lapID in accumulationTargets {
-                        guard let lapIndex = context.laps.firstIndex(where: { $0.id == lapID }) else { continue }
-                        context.laps[lapIndex].accumulatedDuration += share
-                    }
-                }
-            }
-
-            context.state = .stopped
-            context.pauseStartedAt = resolvedStopDate
-            context.lastLapActivationAt = nil
-            normalizedContexts.append(context)
+            var restoredContext = sessionContext(from: persisted)
+            let restoreMode = inferredRestoreMode(from: restoredContext)
+            distributePendingWholeSeconds(in: &restoredContext, until: resolvedStopDate, mode: restoreMode)
+            restoredContext.state = .stopped
+            restoredContext.pauseStartedAt = resolvedStopDate
+            normalizedContexts.append(persistedContext(from: restoredContext))
         }
 
         return StopwatchStorageSnapshot(
@@ -1172,6 +1286,44 @@ final class StopwatchService: ObservableObject {
             selectedSessionID: snapshot.selectedSessionID,
             nextSessionNumber: snapshot.nextSessionNumber
         )
+    }
+
+    private func inferredRestoreMode(from context: SessionContext) -> SplitAccumulationMode {
+        let activeCount = normalizedActiveLapIDs(
+            context.activeLapIDs,
+            in: context.laps,
+            selectedLapID: context.selectedLapID,
+            mode: .checkbox
+        ).count
+        return activeCount > 1 ? .checkbox : .radio
+    }
+
+    private func distributionOrder(
+        laps: [WorkLap],
+        selectedLapID: UUID?,
+        activeLapIDs: Set<UUID>,
+        mode: SplitAccumulationMode
+    ) -> [UUID] {
+        switch mode {
+        case .radio:
+            guard
+                let selectedLapID,
+                laps.contains(where: { $0.id == selectedLapID })
+            else {
+                return []
+            }
+            return [selectedLapID]
+        case .checkbox:
+            let normalized = normalizedActiveLapIDs(
+                activeLapIDs,
+                in: laps,
+                selectedLapID: selectedLapID,
+                mode: .checkbox
+            )
+            return laps.compactMap { lap in
+                normalized.contains(lap.id) ? lap.id : nil
+            }
+        }
     }
 }
 

@@ -621,6 +621,8 @@ struct SplitLogTests {
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
+            lastDistributedWholeSeconds: 0,
+            distributionCursor: 0,
             totalPausedDuration: 0,
             completedPauseIntervals: []
         )
@@ -632,6 +634,8 @@ struct SplitLogTests {
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
+            lastDistributedWholeSeconds: 0,
+            distributionCursor: 0,
             totalPausedDuration: 0,
             completedPauseIntervals: []
         )
@@ -690,6 +694,8 @@ struct SplitLogTests {
             state: .stopped,
             pauseStartedAt: t2,
             lastLapActivationAt: nil,
+            lastDistributedWholeSeconds: 20,
+            distributionCursor: 0,
             totalPausedDuration: 0,
             completedPauseIntervals: []
         )
