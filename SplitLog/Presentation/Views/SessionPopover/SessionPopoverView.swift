@@ -452,7 +452,8 @@ struct SessionPopoverView: View {
                     onCopy: copySessionSummaryToPasteboard,
                     onClose: {
                         isShowingSessionSummaryModal = false
-                    }
+                    },
+                    modalWidth: showTimelineRing ? 400 : 370
                 )
             }
 

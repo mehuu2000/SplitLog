@@ -15,6 +15,7 @@ struct SessionSummaryOverlayView: View {
     let onToggleTimeFormat: () -> Void
     let onCopy: () -> Void
     let onClose: () -> Void
+    let modalWidth: CGFloat
 
     var body: some View {
         ZStack {
@@ -98,7 +99,7 @@ struct SessionSummaryOverlayView: View {
                 }
             }
             .padding(14)
-            .frame(width: 400)
+            .frame(width: modalWidth)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
