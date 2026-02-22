@@ -31,6 +31,8 @@ struct SessionPopoverView: View {
     private struct LapSecondsComputationKey: Equatable {
         var sessionID: UUID?
         var selectedLapID: UUID?
+        var activeLapIDs: [UUID]
+        var splitAccumulationMode: SplitAccumulationMode
         var state: SessionState
         var totalElapsedSeconds: Int
         var lapSnapshots: [LapSecondsSnapshot]
@@ -131,6 +133,8 @@ struct SessionPopoverView: View {
         let lapListView = SessionLapListView(
             laps: stopwatch.laps,
             selectedLapID: stopwatch.selectedLapID,
+            activeLapIDs: stopwatch.activeLapIDs,
+            splitAccumulationMode: appSettingsStore.splitAccumulationMode,
             lapDisplayedSeconds: lapDisplayedSeconds,
             subtitleText: subtitleText,
             subtitleColor: colorResolver.subtitleTextColor,
@@ -144,6 +148,9 @@ struct SessionPopoverView: View {
             colorForLap: { lapColor(for: $0) },
             onSelectLap: { lapID in
                 handleSelectLap(lapID: lapID)
+            },
+            onToggleLapActive: { lapID in
+                handleToggleLapActive(lapID: lapID)
             },
             onOpenMemo: { lap in
                 beginLapMemoEdit(for: lap)
@@ -481,6 +488,7 @@ struct SessionPopoverView: View {
         .tint(colorResolver.controlTint)
         .background(.regularMaterial)
         .onAppear {
+            stopwatch.setSplitAccumulationMode(appSettingsStore.splitAccumulationMode)
             stopwatch.setDisplayActive(true, showTimelineRing: showTimelineRing)
             refreshSessionTitleUnderlineWidth(force: true)
             refreshLapDisplayedSecondsCache(
@@ -496,6 +504,9 @@ struct SessionPopoverView: View {
         }
         .onChange(of: appSettingsStore.showTimelineRing) { _, isVisible in
             stopwatch.setDisplayActive(true, showTimelineRing: isVisible)
+        }
+        .onChange(of: appSettingsStore.splitAccumulationMode) { _, mode in
+            stopwatch.setSplitAccumulationMode(mode)
         }
         .onChange(of: lapSecondsKey) { _, newKey in
             refreshLapDisplayedSecondsCache(
@@ -772,6 +783,11 @@ struct SessionPopoverView: View {
     private func handleSelectLap(lapID: UUID) {
         commitPendingInlineEdits()
         stopwatch.selectLap(lapID: lapID)
+    }
+
+    private func handleToggleLapActive(lapID: UUID) {
+        commitPendingInlineEdits()
+        stopwatch.toggleLapActive(lapID: lapID)
     }
 
     private func requestReset() {
@@ -1138,7 +1154,8 @@ struct SessionPopoverView: View {
             return granted
         }
 
-        if stopwatch.state == .running,
+        if appSettingsStore.splitAccumulationMode == .radio,
+           stopwatch.state == .running,
            let selectedLapID = stopwatch.selectedLapID,
            let selectedEntry = entries.first(where: { $0.lap.id == selectedLapID }) {
             let nonSelectedEntries = entries.filter { $0.lap.id != selectedLapID && $0.fraction > 0 }
@@ -1175,6 +1192,8 @@ struct SessionPopoverView: View {
         LapSecondsComputationKey(
             sessionID: stopwatch.selectedSessionID,
             selectedLapID: stopwatch.selectedLapID,
+            activeLapIDs: stopwatch.activeLapIDs.sorted { $0.uuidString < $1.uuidString },
+            splitAccumulationMode: appSettingsStore.splitAccumulationMode,
             state: stopwatch.state,
             totalElapsedSeconds: totalElapsedSeconds,
             lapSnapshots: stopwatch.laps.map { lap in

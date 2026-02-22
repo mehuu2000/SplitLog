@@ -131,6 +131,27 @@ struct SessionSettingsOverlayView: View {
                                 }
                                 .fixedSize()
                             }
+
+                            HStack {
+                                Text("Split配分モード")
+                                Spacer()
+                                Picker(
+                                    "Split配分モード",
+                                    selection: Binding(
+                                        get: { settingsStore.splitAccumulationMode },
+                                        set: { newValue in
+                                            settingsStore.setSplitAccumulationMode(newValue)
+                                        }
+                                    )
+                                ) {
+                                    Text("ラジオ")
+                                        .tag(SplitAccumulationMode.radio)
+                                    Text("チェック")
+                                        .tag(SplitAccumulationMode.checkbox)
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
                         }
 
                         VStack(alignment: .leading, spacing: 8) {

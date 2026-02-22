@@ -22,25 +22,33 @@ enum SummaryMemoFormat: String, Codable, CaseIterable, Sendable {
     case plain
 }
 
+enum SplitAccumulationMode: String, Codable, CaseIterable, Sendable {
+    case radio
+    case checkbox
+}
+
 struct AppSettings: Equatable, Codable, Sendable {
     var themeMode: ThemeMode
     var showTimelineRing: Bool
     var timelineRingHoursPerCycle: Int
     var summaryTimeFormat: SummaryTimeFormat
     var summaryMemoFormat: SummaryMemoFormat
+    var splitAccumulationMode: SplitAccumulationMode
 
     init(
         themeMode: ThemeMode = .color,
         showTimelineRing: Bool = true,
         timelineRingHoursPerCycle: Int = 3,
         summaryTimeFormat: SummaryTimeFormat = .decimalHours,
-        summaryMemoFormat: SummaryMemoFormat = .bulleted
+        summaryMemoFormat: SummaryMemoFormat = .bulleted,
+        splitAccumulationMode: SplitAccumulationMode = .radio
     ) {
         self.themeMode = themeMode
         self.showTimelineRing = showTimelineRing
         self.timelineRingHoursPerCycle = max(1, timelineRingHoursPerCycle)
         self.summaryTimeFormat = summaryTimeFormat
         self.summaryMemoFormat = summaryMemoFormat
+        self.splitAccumulationMode = splitAccumulationMode
     }
 
     static let `default` = AppSettings()
@@ -51,6 +59,7 @@ struct AppSettings: Equatable, Codable, Sendable {
         case timelineRingHoursPerCycle
         case summaryTimeFormat
         case summaryMemoFormat
+        case splitAccumulationMode
     }
 
     init(from decoder: Decoder) throws {
@@ -60,5 +69,6 @@ struct AppSettings: Equatable, Codable, Sendable {
         self.timelineRingHoursPerCycle = max(1, try container.decodeIfPresent(Int.self, forKey: .timelineRingHoursPerCycle) ?? 3)
         self.summaryTimeFormat = try container.decodeIfPresent(SummaryTimeFormat.self, forKey: .summaryTimeFormat) ?? .decimalHours
         self.summaryMemoFormat = try container.decodeIfPresent(SummaryMemoFormat.self, forKey: .summaryMemoFormat) ?? .bulleted
+        self.splitAccumulationMode = try container.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .radio
     }
 }

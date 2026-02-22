@@ -10,6 +10,8 @@ import SwiftUI
 struct SessionLapListView: View {
     let laps: [WorkLap]
     let selectedLapID: UUID?
+    let activeLapIDs: Set<UUID>
+    let splitAccumulationMode: SplitAccumulationMode
     let lapDisplayedSeconds: [UUID: Int]
     let subtitleText: String
     let subtitleColor: Color
@@ -22,6 +24,7 @@ struct SessionLapListView: View {
     let formatDuration: (Int) -> String
     let colorForLap: (Int) -> Color
     let onSelectLap: (UUID) -> Void
+    let onToggleLapActive: (UUID) -> Void
     let onOpenMemo: (WorkLap) -> Void
     let onBeginLapLabelEdit: (WorkLap) -> Void
     let onCommitLapLabelEdit: (UUID) -> Void
@@ -45,6 +48,8 @@ struct SessionLapListView: View {
                                 SessionLapRowView(
                                     lap: lap,
                                     selectedLapID: selectedLapID,
+                                    activeLapIDs: activeLapIDs,
+                                    splitAccumulationMode: splitAccumulationMode,
                                     displayedSeconds: lapDisplayedSeconds[lap.id] ?? 0,
                                     isEditing: editingLapID == lap.id,
                                     editingText: $editingLapLabelDraft,
@@ -56,6 +61,9 @@ struct SessionLapListView: View {
                                     inlineEditorBackgroundColor: inlineEditorBackgroundColor,
                                     onSelectLap: {
                                         onSelectLap(lap.id)
+                                    },
+                                    onToggleLapActive: {
+                                        onToggleLapActive(lap.id)
                                     },
                                     onOpenMemo: {
                                         onOpenMemo(lap)
@@ -96,6 +104,8 @@ struct SessionLapListView: View {
 private struct SessionLapRowView: View {
     let lap: WorkLap
     let selectedLapID: UUID?
+    let activeLapIDs: Set<UUID>
+    let splitAccumulationMode: SplitAccumulationMode
     let displayedSeconds: Int
     let isEditing: Bool
     @Binding var editingText: String
@@ -106,6 +116,7 @@ private struct SessionLapRowView: View {
     let secondaryIconColor: Color
     let inlineEditorBackgroundColor: Color
     let onSelectLap: () -> Void
+    let onToggleLapActive: () -> Void
     let onOpenMemo: () -> Void
     let onBeginEdit: () -> Void
     let onCommitEdit: () -> Void
@@ -113,8 +124,8 @@ private struct SessionLapRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Button(action: onSelectLap) {
-                    Image(systemName: selectedLapID == lap.id ? "largecircle.fill.circle" : "circle")
+                Button(action: leadingControlAction) {
+                    Image(systemName: leadingControlIconName)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(primaryTextColor)
                         .frame(width: 16, height: 16)
@@ -165,6 +176,25 @@ private struct SessionLapRowView: View {
                 .fill(color)
                 .frame(height: 2)
                 .clipShape(RoundedRectangle(cornerRadius: 1))
+        }
+    }
+
+    private var leadingControlIconName: String {
+        switch splitAccumulationMode {
+        case .radio:
+            return selectedLapID == lap.id ? "largecircle.fill.circle" : "circle"
+        case .checkbox:
+            return activeLapIDs.contains(lap.id) ? "checkmark.square.fill" : "square"
+        }
+    }
+
+    private func leadingControlAction() {
+        switch splitAccumulationMode {
+        case .radio:
+            onSelectLap()
+        case .checkbox:
+            onToggleLapActive()
+            onSelectLap()
         }
     }
 }

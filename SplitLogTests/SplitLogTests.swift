@@ -100,6 +100,50 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func checkboxMode_distributesElapsedAcrossCheckedLaps() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_016)
+
+        service.startSession(at: t0)
+        service.finishLap(at: t1) // lap2 selected/running
+
+        let lap1ID = service.laps[0].id
+        let lap2ID = service.laps[1].id
+
+        service.setSplitAccumulationMode(.checkbox, at: t1)
+        service.toggleLapActive(lapID: lap1ID, at: t1) // lap1 + lap2
+
+        #expect(service.activeLapIDs == Set([lap1ID, lap2ID]))
+        #expect(service.elapsedLap(service.laps[0], at: t2) == 13)
+        #expect(service.elapsedLap(service.laps[1], at: t2) == 3)
+        #expect(service.elapsedSession(at: t2) == 16)
+    }
+
+    @MainActor
+    @Test func checkboxMode_finishLap_keepsExistingChecksAndAddsNewLapCheck() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+
+        service.startSession(at: t0)
+        service.finishLap(at: t1) // lap2 selected/running
+
+        let lap1ID = service.laps[0].id
+        let lap2ID = service.laps[1].id
+        service.setSplitAccumulationMode(.checkbox, at: t1)
+        service.toggleLapActive(lapID: lap1ID, at: t1) // lap1 + lap2
+
+        service.finishLap(at: t2)
+
+        let lap3ID = service.laps[2].id
+        #expect(service.activeLapIDs == Set([lap1ID, lap2ID, lap3ID]))
+        #expect(service.selectedLapID == lap3ID)
+    }
+
+    @MainActor
     @Test func finishLap_fromOlderSelectedLap_createsNextMaxIndexLap() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
@@ -573,6 +617,7 @@ struct SplitLogTests {
             session: session1,
             laps: [],
             selectedLapID: nil,
+            activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
@@ -583,6 +628,7 @@ struct SplitLogTests {
             session: session2,
             laps: [],
             selectedLapID: nil,
+            activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
@@ -640,6 +686,7 @@ struct SplitLogTests {
             session: session,
             laps: [lap1, lap2],
             selectedLapID: UUID(), // not found in laps
+            activeLapIDs: [],
             state: .stopped,
             pauseStartedAt: t2,
             lastLapActivationAt: nil,

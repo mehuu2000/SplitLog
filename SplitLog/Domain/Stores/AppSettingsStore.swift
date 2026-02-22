@@ -55,6 +55,10 @@ final class AppSettingsStore: ObservableObject {
         settings.summaryMemoFormat
     }
 
+    var splitAccumulationMode: SplitAccumulationMode {
+        settings.splitAccumulationMode
+    }
+
     func setThemeMode(_ themeMode: ThemeMode) {
         guard settings.themeMode != themeMode else { return }
         settings.themeMode = themeMode
@@ -79,6 +83,11 @@ final class AppSettingsStore: ObservableObject {
     func setSummaryMemoFormat(_ format: SummaryMemoFormat) {
         guard settings.summaryMemoFormat != format else { return }
         settings.summaryMemoFormat = format
+    }
+
+    func setSplitAccumulationMode(_ mode: SplitAccumulationMode) {
+        guard settings.splitAccumulationMode != mode else { return }
+        settings.splitAccumulationMode = mode
     }
 
     func update(_ settings: AppSettings) {

@@ -24,6 +24,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
     var session: WorkSession
     var laps: [WorkLap]
     var selectedLapID: UUID?
+    var activeLapIDs: Set<UUID>
     var state: SessionState
     var pauseStartedAt: Date?
     var lastLapActivationAt: Date?
@@ -34,6 +35,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         session: WorkSession,
         laps: [WorkLap],
         selectedLapID: UUID?,
+        activeLapIDs: Set<UUID>,
         state: SessionState,
         pauseStartedAt: Date?,
         lastLapActivationAt: Date?,
@@ -43,6 +45,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         self.session = session
         self.laps = laps
         self.selectedLapID = selectedLapID
+        self.activeLapIDs = activeLapIDs
         self.state = state
         self.pauseStartedAt = pauseStartedAt
         self.lastLapActivationAt = lastLapActivationAt
@@ -54,6 +57,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         case session
         case laps
         case selectedLapID
+        case activeLapIDs
         case state
         case pauseStartedAt
         case lastLapActivationAt
@@ -66,6 +70,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         session = try container.decode(WorkSession.self, forKey: .session)
         laps = try container.decode([WorkLap].self, forKey: .laps)
         selectedLapID = try container.decodeIfPresent(UUID.self, forKey: .selectedLapID)
+        activeLapIDs = Set(try container.decodeIfPresent([UUID].self, forKey: .activeLapIDs) ?? [])
         state = try container.decode(SessionState.self, forKey: .state)
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         lastLapActivationAt = try container.decodeIfPresent(Date.self, forKey: .lastLapActivationAt)

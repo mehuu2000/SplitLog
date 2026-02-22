@@ -27,6 +27,7 @@ final class StopwatchService: ObservableObject {
     @Published private(set) var session: WorkSession?
     @Published private(set) var laps: [WorkLap] = []
     @Published private(set) var selectedLapID: UUID?
+    @Published private(set) var activeLapIDs: Set<UUID> = []
     @Published private(set) var clock: Date = Date()
     @Published private(set) var persistenceErrorEvent: PersistenceErrorEvent?
 
@@ -41,6 +42,7 @@ final class StopwatchService: ObservableObject {
     private var sessionContexts: [UUID: SessionContext] = [:]
     private var sessionOrder: [UUID] = []
     private var nextSessionNumber: Int = 1
+    private var splitAccumulationMode: SplitAccumulationMode = .radio
     private let sessionStore: SessionStore?
     private var persistenceWriter: CoalescingSessionStoreWriter?
     private let restoreReferenceDate: Date?
@@ -50,6 +52,7 @@ final class StopwatchService: ObservableObject {
         var session: WorkSession
         var laps: [WorkLap]
         var selectedLapID: UUID?
+        var activeLapIDs: Set<UUID>
         var state: SessionState
         var pauseStartedAt: Date?
         var lastLapActivationAt: Date?
@@ -123,6 +126,77 @@ final class StopwatchService: ObservableObject {
         sessionContexts[sessionID]?.state ?? .idle
     }
 
+    func setSplitAccumulationMode(_ mode: SplitAccumulationMode, at date: Date = Date()) {
+        guard splitAccumulationMode != mode else { return }
+
+        if
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.state == .running
+        {
+            accumulateActiveDuration(in: &context, until: date)
+            sessionContexts[selectedSessionID] = context
+        }
+
+        splitAccumulationMode = mode
+
+        if let selectedSessionID, var context = sessionContexts[selectedSessionID] {
+            context.activeLapIDs = normalizedActiveLapIDs(
+                context.activeLapIDs,
+                in: context.laps,
+                selectedLapID: context.selectedLapID,
+                mode: mode
+            )
+            if context.state == .running {
+                context.lastLapActivationAt = date
+            }
+            commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
+        } else {
+            applySelectedContext()
+        }
+    }
+
+    func toggleLapActive(lapID: UUID, at date: Date = Date()) {
+        guard splitAccumulationMode == .checkbox else { return }
+        guard
+            let selectedSessionID,
+            var context = sessionContexts[selectedSessionID],
+            context.laps.contains(where: { $0.id == lapID })
+        else {
+            return
+        }
+
+        if context.state == .running {
+            accumulateActiveDuration(in: &context, until: date)
+        }
+
+        var activeLapIDs = normalizedActiveLapIDs(
+            context.activeLapIDs,
+            in: context.laps,
+            selectedLapID: context.selectedLapID,
+            mode: .checkbox
+        )
+
+        if activeLapIDs.contains(lapID) {
+            guard activeLapIDs.count > 1 else {
+                if context.state == .running {
+                    context.lastLapActivationAt = date
+                }
+                commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
+                return
+            }
+            activeLapIDs.remove(lapID)
+        } else {
+            activeLapIDs.insert(lapID)
+        }
+
+        context.activeLapIDs = activeLapIDs
+        if context.state == .running {
+            context.lastLapActivationAt = date
+        }
+        commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
+    }
+
     func startSession(at date: Date = Date()) {
         guard let selectedSessionID, var context = sessionContexts[selectedSessionID] else {
             let newContext = makeRunningSessionContext(at: date)
@@ -184,6 +258,20 @@ final class StopwatchService: ObservableObject {
         )
         context.laps.append(nextLap)
         context.selectedLapID = nextLap.id
+        switch splitAccumulationMode {
+        case .radio:
+            context.activeLapIDs = [nextLap.id]
+        case .checkbox:
+            // Keep every currently checked split as-is, then include the newly created split.
+            // This prevents implicit unchecking when creating a new split in checkbox mode.
+            let lapIDs = Set(context.laps.map(\.id))
+            var activeLapIDs = context.activeLapIDs.intersection(lapIDs)
+            if activeLapIDs.isEmpty {
+                activeLapIDs = [nextLap.id]
+            }
+            activeLapIDs.insert(nextLap.id)
+            context.activeLapIDs = activeLapIDs
+        }
         context.lastLapActivationAt = date
 
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
@@ -202,9 +290,22 @@ final class StopwatchService: ObservableObject {
         if context.state == .running {
             accumulateActiveDuration(in: &context, until: date)
             context.selectedLapID = lapID
+            if splitAccumulationMode == .radio {
+                context.activeLapIDs = [lapID]
+            }
             context.lastLapActivationAt = date
         } else if context.state == .paused || context.state == .stopped {
             context.selectedLapID = lapID
+            if splitAccumulationMode == .radio {
+                context.activeLapIDs = [lapID]
+            } else {
+                context.activeLapIDs = normalizedActiveLapIDs(
+                    context.activeLapIDs,
+                    in: context.laps,
+                    selectedLapID: context.selectedLapID,
+                    mode: .checkbox
+                )
+            }
         } else {
             return
         }
@@ -280,6 +381,7 @@ final class StopwatchService: ObservableObject {
         session = nil
         laps = []
         selectedLapID = nil
+        activeLapIDs = []
         clock = Date()
         stopClock()
 
@@ -294,6 +396,7 @@ final class StopwatchService: ObservableObject {
         context.session.endedAt = nil
         context.laps = []
         context.selectedLapID = nil
+        context.activeLapIDs = []
         context.pauseStartedAt = nil
         context.lastLapActivationAt = nil
         context.totalPausedDuration = 0
@@ -315,6 +418,7 @@ final class StopwatchService: ObservableObject {
             context.session.endedAt = nil
             context.laps = []
             context.selectedLapID = nil
+            context.activeLapIDs = []
             context.pauseStartedAt = nil
             context.lastLapActivationAt = nil
             context.totalPausedDuration = 0
@@ -496,6 +600,7 @@ final class StopwatchService: ObservableObject {
             session = nil
             laps = []
             selectedLapID = nil
+            activeLapIDs = []
             syncTimerForSelectedState()
             return
         }
@@ -504,6 +609,12 @@ final class StopwatchService: ObservableObject {
         session = context.session
         laps = context.laps
         selectedLapID = context.selectedLapID
+        activeLapIDs = normalizedActiveLapIDs(
+            context.activeLapIDs,
+            in: context.laps,
+            selectedLapID: context.selectedLapID,
+            mode: splitAccumulationMode
+        )
         syncTimerForSelectedState()
     }
 
@@ -533,6 +644,7 @@ final class StopwatchService: ObservableObject {
             session: session,
             laps: [],
             selectedLapID: nil,
+            activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
             lastLapActivationAt: nil,
@@ -555,6 +667,7 @@ final class StopwatchService: ObservableObject {
         context.session.endedAt = nil
         context.laps = [initialLap]
         context.selectedLapID = initialLap.id
+        context.activeLapIDs = [initialLap.id]
         context.state = .running
         context.pauseStartedAt = nil
         context.lastLapActivationAt = date
@@ -664,11 +777,18 @@ final class StopwatchService: ObservableObject {
 
     private func accumulateActiveDuration(in context: inout SessionContext, until date: Date) {
         guard context.state == .running else { return }
-        guard let selectedLapID = context.selectedLapID, let lastLapActivationAt = context.lastLapActivationAt else { return }
-        guard let lapIndex = context.laps.firstIndex(where: { $0.id == selectedLapID }) else { return }
+        guard let lastLapActivationAt = context.lastLapActivationAt else { return }
         guard date > lastLapActivationAt else { return }
+        let activeLapIDs = activeLapIDsForAccumulation(in: context)
+        guard !activeLapIDs.isEmpty else { return }
 
-        context.laps[lapIndex].accumulatedDuration += date.timeIntervalSince(lastLapActivationAt)
+        let delta = date.timeIntervalSince(lastLapActivationAt)
+        let share = delta / Double(activeLapIDs.count)
+
+        for activeLapID in activeLapIDs {
+            guard let lapIndex = context.laps.firstIndex(where: { $0.id == activeLapID }) else { continue }
+            context.laps[lapIndex].accumulatedDuration += share
+        }
         context.lastLapActivationAt = date
     }
 
@@ -683,12 +803,40 @@ final class StopwatchService: ObservableObject {
 
     private func elapsedLap(_ lap: WorkLap, in context: SessionContext, at referenceDate: Date) -> TimeInterval {
         var elapsed = max(0, lap.accumulatedDuration)
-        guard context.state == .running, context.selectedLapID == lap.id, let lastLapActivationAt = context.lastLapActivationAt else {
+        guard context.state == .running, let lastLapActivationAt = context.lastLapActivationAt else {
+            return elapsed
+        }
+        let activeLapIDs = activeLapIDsForAccumulation(in: context)
+        guard activeLapIDs.contains(lap.id), !activeLapIDs.isEmpty else {
             return elapsed
         }
 
-        elapsed += max(0, referenceDate.timeIntervalSince(lastLapActivationAt))
+        let delta = max(0, referenceDate.timeIntervalSince(lastLapActivationAt))
+        elapsed += delta / Double(activeLapIDs.count)
         return max(0, elapsed)
+    }
+
+    private func activeLapIDsForAccumulation(in context: SessionContext) -> [UUID] {
+        switch splitAccumulationMode {
+        case .radio:
+            guard
+                let selectedLapID = context.selectedLapID,
+                context.laps.contains(where: { $0.id == selectedLapID })
+            else {
+                return []
+            }
+            return [selectedLapID]
+        case .checkbox:
+            let normalized = normalizedActiveLapIDs(
+                context.activeLapIDs,
+                in: context.laps,
+                selectedLapID: context.selectedLapID,
+                mode: .checkbox
+            )
+            return context.laps.compactMap { lap in
+                normalized.contains(lap.id) ? lap.id : nil
+            }
+        }
     }
 
     private func startClock() {
@@ -891,6 +1039,7 @@ final class StopwatchService: ObservableObject {
             session: context.session,
             laps: context.laps,
             selectedLapID: context.selectedLapID,
+            activeLapIDs: context.activeLapIDs,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
             lastLapActivationAt: context.lastLapActivationAt,
@@ -901,10 +1050,17 @@ final class StopwatchService: ObservableObject {
 
     private func sessionContext(from context: PersistedSessionContext) -> SessionContext {
         let selectedLapID = normalizedSelectedLapID(context.selectedLapID, in: context.laps)
+        let activeLapIDs = normalizedActiveLapIDs(
+            context.activeLapIDs,
+            in: context.laps,
+            selectedLapID: selectedLapID,
+            mode: .checkbox
+        )
         return SessionContext(
             session: context.session,
             laps: context.laps,
             selectedLapID: selectedLapID,
+            activeLapIDs: activeLapIDs,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
             lastLapActivationAt: context.lastLapActivationAt,
@@ -930,6 +1086,39 @@ final class StopwatchService: ObservableObject {
         return laps.max(by: { $0.index < $1.index })?.id
     }
 
+    private func normalizedActiveLapIDs(
+        _ activeLapIDs: Set<UUID>,
+        in laps: [WorkLap],
+        selectedLapID: UUID?,
+        mode: SplitAccumulationMode
+    ) -> Set<UUID> {
+        guard !laps.isEmpty else { return [] }
+
+        switch mode {
+        case .radio:
+            guard
+                let selectedLapID,
+                laps.contains(where: { $0.id == selectedLapID })
+            else {
+                return []
+            }
+            return [selectedLapID]
+        case .checkbox:
+            let lapIDs = Set(laps.map(\.id))
+            let filtered = activeLapIDs.intersection(lapIDs)
+            if !filtered.isEmpty {
+                return filtered
+            }
+            if let selectedLapID, lapIDs.contains(selectedLapID) {
+                return [selectedLapID]
+            }
+            if let newestLapID = laps.max(by: { $0.index < $1.index })?.id {
+                return [newestLapID]
+            }
+            return []
+        }
+    }
+
     private func normalizedSnapshotForRestore(
         _ snapshot: StopwatchStorageSnapshot,
         restoreDate: Date
@@ -948,12 +1137,25 @@ final class StopwatchService: ObservableObject {
             let resolvedStopDate = max(snapshot.savedAt, restoreDate)
 
             if
-                let selectedLapID = context.selectedLapID,
                 let lastLapActivationAt = context.lastLapActivationAt,
-                resolvedStopDate > lastLapActivationAt,
-                let lapIndex = context.laps.firstIndex(where: { $0.id == selectedLapID })
+                resolvedStopDate > lastLapActivationAt
             {
-                context.laps[lapIndex].accumulatedDuration += resolvedStopDate.timeIntervalSince(lastLapActivationAt)
+                let delta = resolvedStopDate.timeIntervalSince(lastLapActivationAt)
+                let normalizedActiveLapIDs = normalizedActiveLapIDs(
+                    context.activeLapIDs,
+                    in: context.laps,
+                    selectedLapID: context.selectedLapID,
+                    mode: .checkbox
+                )
+                let fallbackSelectedID = context.selectedLapID.map { [$0] } ?? []
+                let accumulationTargets = normalizedActiveLapIDs.isEmpty ? fallbackSelectedID : Array(normalizedActiveLapIDs)
+                if !accumulationTargets.isEmpty {
+                    let share = delta / Double(accumulationTargets.count)
+                    for lapID in accumulationTargets {
+                        guard let lapIndex = context.laps.firstIndex(where: { $0.id == lapID }) else { continue }
+                        context.laps[lapIndex].accumulatedDuration += share
+                    }
+                }
             }
 
             context.state = .stopped
