@@ -32,6 +32,7 @@ final class StopwatchService: ObservableObject {
     @Published private(set) var persistenceErrorEvent: PersistenceErrorEvent?
 
     private var timerCancellable: AnyCancellable?
+    private var firstTickWorkItem: DispatchWorkItem?
     private let autoTick: Bool
     private let foregroundClockUpdateIntervalWithRing: TimeInterval = 1.0
     private let foregroundClockUpdateIntervalWithoutRing: TimeInterval = 1.0
@@ -595,6 +596,12 @@ final class StopwatchService: ObservableObject {
         return elapsedLap(lap, in: context, at: referenceDate ?? clock)
     }
 
+    func displayedLapSecondsMap(at referenceDate: Date? = nil) -> [UUID: Int] {
+        guard let context = currentContext else { return [:] }
+        let date = referenceDate ?? clock
+        return displayedLapSecondsMap(in: context, at: date)
+    }
+
     private var currentContext: SessionContext? {
         guard let selectedSessionID else { return nil }
         return sessionContexts[selectedSessionID]
@@ -825,6 +832,51 @@ final class StopwatchService: ObservableObject {
         return elapsed
     }
 
+    private func displayedLapSecondsMap(in context: SessionContext, at referenceDate: Date) -> [UUID: Int] {
+        guard !context.laps.isEmpty else { return [:] }
+
+        var result: [UUID: Int] = [:]
+        result.reserveCapacity(context.laps.count)
+
+        let baseByLapID: [UUID: Int] = Dictionary(
+            uniqueKeysWithValues: context.laps.map { lap in
+                (lap.id, max(0, Int(floor(lap.accumulatedDuration))))
+            }
+        )
+
+        guard context.state == .running else {
+            for lap in context.laps {
+                result[lap.id] = baseByLapID[lap.id] ?? 0
+            }
+            return result
+        }
+
+        let pending = pendingDistribution(in: context, at: referenceDate)
+        guard pending.delta > 0, !pending.order.isEmpty else {
+            for lap in context.laps {
+                result[lap.id] = baseByLapID[lap.id] ?? 0
+            }
+            return result
+        }
+
+        var hitCountByLapID: [UUID: Int] = [:]
+        hitCountByLapID.reserveCapacity(pending.order.count)
+        for (index, lapID) in pending.order.enumerated() {
+            let hit = pending.hitCount(for: index)
+            if hit > 0 {
+                hitCountByLapID[lapID] = hit
+            }
+        }
+
+        for lap in context.laps {
+            let base = baseByLapID[lap.id] ?? 0
+            let increment = hitCountByLapID[lap.id] ?? 0
+            result[lap.id] = base + increment
+        }
+
+        return result
+    }
+
     private struct PendingDistribution {
         let order: [UUID]
         let cursor: Int
@@ -951,18 +1003,60 @@ final class StopwatchService: ObservableObject {
         } else {
             interval = backgroundClockUpdateInterval
         }
+
+        let now = Date()
+        let firstTickDelay = initialTickDelay(at: now, interval: interval)
         stopClock()
+
+        // Keep timer updates aligned with whole-second boundaries of elapsed session time.
+        if firstTickDelay < interval {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.firstTickWorkItem = nil
+                self.clock = Date()
+                self.startRepeatingClock(interval: interval)
+            }
+            firstTickWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + firstTickDelay, execute: workItem)
+            return
+        }
+
+        startRepeatingClock(interval: interval)
+    }
+
+    private func stopClock() {
+        firstTickWorkItem?.cancel()
+        firstTickWorkItem = nil
+        timerCancellable?.cancel()
+        timerCancellable = nil
+    }
+
+    private func startRepeatingClock(interval: TimeInterval) {
+        let tolerance = min(0.2, interval * 0.2)
         timerCancellable = Timer
-            .publish(every: interval, tolerance: interval * 0.25, on: .main, in: .common)
+            .publish(every: interval, tolerance: tolerance, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] now in
                 self?.clock = now
             }
     }
 
-    private func stopClock() {
-        timerCancellable?.cancel()
-        timerCancellable = nil
+    private func initialTickDelay(at now: Date, interval: TimeInterval) -> TimeInterval {
+        guard interval > 0 else { return 0 }
+        guard
+            let selectedSessionID,
+            let context = sessionContexts[selectedSessionID],
+            context.state == .running
+        else {
+            return interval
+        }
+
+        let elapsed = max(0, elapsedSession(in: context, at: now))
+        let remainder = elapsed.truncatingRemainder(dividingBy: interval)
+        if remainder <= 0.000_001 {
+            return interval
+        }
+        return max(0.001, interval - remainder)
     }
 
     private func syncTimerForSelectedState() {

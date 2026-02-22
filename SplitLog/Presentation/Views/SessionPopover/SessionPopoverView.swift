@@ -566,7 +566,7 @@ struct SessionPopoverView: View {
     }
 
     private var ringBlockDuration: TimeInterval {
-        30
+        TimeInterval(max(1, appSettingsStore.timelineRingHoursPerCycle)) * 60 * 60
     }
 
     private var selectedSessionTitleText: String {
@@ -780,7 +780,7 @@ struct SessionPopoverView: View {
         }
 
         if stopwatch.state == .running || stopwatch.state == .paused {
-            stopwatch.finishSession(at: stopwatch.clock)
+            stopwatch.finishSession()
             invalidateComputedCaches()
             return
         }
@@ -1146,12 +1146,7 @@ struct SessionPopoverView: View {
     }
 
     private func displayedLapSeconds(referenceDate: Date) -> [UUID: Int] {
-        return Dictionary(
-            uniqueKeysWithValues: stopwatch.laps.map { lap in
-                let raw = max(0, stopwatch.elapsedLap(lap, at: referenceDate))
-                return (lap.id, durationSeconds(raw))
-            }
-        )
+        stopwatch.displayedLapSecondsMap(at: referenceDate)
     }
 
     private func makeLapSecondsComputationKey(totalElapsedSeconds: Int) -> LapSecondsComputationKey {
