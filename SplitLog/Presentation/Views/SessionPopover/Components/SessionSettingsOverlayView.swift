@@ -86,7 +86,10 @@ struct SessionSettingsOverlayView: View {
                                 selection: Binding(
                                     get: { settingsStore.themeMode },
                                     set: { newValue in
-                                        settingsStore.setThemeMode(newValue)
+                                        guard settingsStore.themeMode != newValue else { return }
+                                        DispatchQueue.main.async {
+                                            settingsStore.setThemeMode(newValue)
+                                        }
                                     }
                                 )
                             ) {
