@@ -33,8 +33,8 @@ final class StopwatchService: ObservableObject {
 
     private var timerCancellable: AnyCancellable?
     private let autoTick: Bool
-    private let foregroundClockUpdateIntervalWithRing: TimeInterval = 1.0 / 15.0
-    private let foregroundClockUpdateIntervalWithoutRing: TimeInterval = 1.0 / 5.0
+    private let foregroundClockUpdateIntervalWithRing: TimeInterval = 1.0
+    private let foregroundClockUpdateIntervalWithoutRing: TimeInterval = 1.0
     private let backgroundClockUpdateInterval: TimeInterval = 1.0
     private var isDisplayActive: Bool = false
     private var isTimelineRingVisible: Bool = true
@@ -593,12 +593,6 @@ final class StopwatchService: ObservableObject {
     func elapsedLap(_ lap: WorkLap, at referenceDate: Date? = nil) -> TimeInterval {
         guard let context = currentContext else { return max(0, lap.accumulatedDuration) }
         return elapsedLap(lap, in: context, at: referenceDate ?? clock)
-    }
-
-    func activeTimelineOffset(at date: Date) -> TimeInterval {
-        guard let context = currentContext else { return 0 }
-        let clampedDate = pausedClampedReferenceDate(for: context, date)
-        return activeElapsed(in: context, from: context.session.startedAt, to: clampedDate)
     }
 
     private var currentContext: SessionContext? {

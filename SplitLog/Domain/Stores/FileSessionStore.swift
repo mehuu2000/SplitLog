@@ -25,7 +25,6 @@ struct FileSessionStore: SessionStore {
         }
 
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(snapshot)
         try data.write(to: fileURL, options: .atomic)
     }
