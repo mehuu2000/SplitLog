@@ -538,25 +538,6 @@ struct SessionPopoverView: View {
         .onChange(of: appSettingsStore.timelineRingHoursPerCycle) { _, _ in
             invalidateTimelineCache()
         }
-        .onChange(of: lapSecondsKey) { _, newKey in
-            refreshLapDisplayedSecondsCache(
-                referenceDate: stopwatch.clock,
-                key: newKey
-            )
-        }
-        .onChange(of: timelineKey) { _, newKey in
-            guard appSettingsStore.showTimelineRing else { return }
-            let lapSecondsKey = makeLapSecondsComputationKey(totalElapsedSeconds: newKey.totalElapsedSeconds)
-            let lapDisplayedSeconds = resolvedLapDisplayedSeconds(
-                referenceDate: stopwatch.clock,
-                key: lapSecondsKey
-            )
-            refreshTimelineCache(
-                totalElapsedSeconds: newKey.totalElapsedSeconds,
-                lapDisplayedSeconds: lapDisplayedSeconds,
-                key: newKey
-            )
-        }
         .onChange(of: selectedSessionTitleText) { _, _ in
             refreshSessionTitleUnderlineWidth()
         }
