@@ -270,7 +270,7 @@ struct SessionPopoverView: View {
                             perimeterBorderColor: colorResolver.timelineBorderColor
                         )
                         .frame(width: 198, height: 198)
-                        .padding(6)
+                        .padding(8)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(colorResolver.sectionBackgroundColor)
@@ -573,7 +573,7 @@ struct SessionPopoverView: View {
     }
 
     private var ringBlockDuration: TimeInterval {
-        TimeInterval(max(1, appSettingsStore.timelineRingHoursPerCycle)) * 60 * 60
+        30
     }
 
     private var selectedSessionTitleText: String {
