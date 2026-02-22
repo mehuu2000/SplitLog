@@ -27,11 +27,9 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
     var activeLapIDs: Set<UUID>
     var state: SessionState
     var pauseStartedAt: Date?
-    var lastLapActivationAt: Date?
     var lastDistributedWholeSeconds: Int
     var distributionCursor: Int
     var totalPausedDuration: TimeInterval
-    var completedPauseIntervals: [DateInterval]
 
     init(
         session: WorkSession,
@@ -40,11 +38,9 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         activeLapIDs: Set<UUID>,
         state: SessionState,
         pauseStartedAt: Date?,
-        lastLapActivationAt: Date?,
         lastDistributedWholeSeconds: Int,
         distributionCursor: Int,
-        totalPausedDuration: TimeInterval,
-        completedPauseIntervals: [DateInterval]
+        totalPausedDuration: TimeInterval
     ) {
         self.session = session
         self.laps = laps
@@ -52,11 +48,9 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         self.activeLapIDs = activeLapIDs
         self.state = state
         self.pauseStartedAt = pauseStartedAt
-        self.lastLapActivationAt = lastLapActivationAt
         self.lastDistributedWholeSeconds = max(0, lastDistributedWholeSeconds)
         self.distributionCursor = max(0, distributionCursor)
-        self.totalPausedDuration = totalPausedDuration
-        self.completedPauseIntervals = completedPauseIntervals
+        self.totalPausedDuration = max(0, totalPausedDuration)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -66,11 +60,9 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         case activeLapIDs
         case state
         case pauseStartedAt
-        case lastLapActivationAt
         case lastDistributedWholeSeconds
         case distributionCursor
         case totalPausedDuration
-        case completedPauseIntervals
     }
 
     init(from decoder: Decoder) throws {
@@ -78,32 +70,17 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         session = try container.decode(WorkSession.self, forKey: .session)
         laps = try container.decode([WorkLap].self, forKey: .laps)
         selectedLapID = try container.decodeIfPresent(UUID.self, forKey: .selectedLapID)
-        activeLapIDs = Set(try container.decodeIfPresent([UUID].self, forKey: .activeLapIDs) ?? [])
+        activeLapIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .activeLapIDs) ?? []
         state = try container.decode(SessionState.self, forKey: .state)
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
-        lastLapActivationAt = try container.decodeIfPresent(Date.self, forKey: .lastLapActivationAt)
-        let legacyDistributedFallback = Int(floor(laps.reduce(0) { partial, lap in
-            partial + max(0, lap.accumulatedDuration)
-        }))
-        lastDistributedWholeSeconds = max(
-            0,
-            try container.decodeIfPresent(Int.self, forKey: .lastDistributedWholeSeconds) ?? legacyDistributedFallback
-        )
+        lastDistributedWholeSeconds = max(0, try container.decodeIfPresent(Int.self, forKey: .lastDistributedWholeSeconds) ?? 0)
         distributionCursor = max(0, try container.decodeIfPresent(Int.self, forKey: .distributionCursor) ?? 0)
-        completedPauseIntervals = try container.decodeIfPresent([DateInterval].self, forKey: .completedPauseIntervals) ?? []
-
-        if let totalPausedDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .totalPausedDuration) {
-            self.totalPausedDuration = max(0, totalPausedDuration)
-        } else {
-            self.totalPausedDuration = completedPauseIntervals.reduce(0) { partial, interval in
-                partial + max(0, interval.duration)
-            }
-        }
+        totalPausedDuration = max(0, try container.decodeIfPresent(TimeInterval.self, forKey: .totalPausedDuration) ?? 0)
     }
 }
 
 struct StopwatchStorageSnapshot: Equatable, Codable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     var schemaVersion: Int
     var savedAt: Date
@@ -139,26 +116,12 @@ struct StopwatchStorageSnapshot: Equatable, Codable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        if let schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) {
-            self.schemaVersion = schemaVersion
-            self.savedAt = try container.decode(Date.self, forKey: .savedAt)
-            self.contexts = try container.decode([PersistedSessionContext].self, forKey: .contexts)
-            self.sessionOrder = try container.decodeIfPresent([UUID].self, forKey: .sessionOrder)
-                ?? self.contexts.map(\.session.id)
-            self.selectedSessionID = try container.decodeIfPresent(UUID.self, forKey: .selectedSessionID)
-            self.nextSessionNumber = try container.decode(Int.self, forKey: .nextSessionNumber)
-            return
-        }
-
-        // Legacy payload support (before schemaVersion/savedAt/sessionOrder were introduced).
-        let contexts = try container.decode([PersistedSessionContext].self, forKey: .contexts)
-        self.schemaVersion = 1
-        self.savedAt = Date()
-        self.contexts = contexts
-        self.sessionOrder = contexts.map(\.session.id)
-        self.selectedSessionID = try container.decodeIfPresent(UUID.self, forKey: .selectedSessionID)
-        self.nextSessionNumber = try container.decode(Int.self, forKey: .nextSessionNumber)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? StopwatchStorageSnapshot.currentSchemaVersion
+        savedAt = try container.decode(Date.self, forKey: .savedAt)
+        contexts = try container.decode([PersistedSessionContext].self, forKey: .contexts)
+        sessionOrder = try container.decode([UUID].self, forKey: .sessionOrder)
+        selectedSessionID = try container.decodeIfPresent(UUID.self, forKey: .selectedSessionID)
+        nextSessionNumber = try container.decode(Int.self, forKey: .nextSessionNumber)
     }
 }
 

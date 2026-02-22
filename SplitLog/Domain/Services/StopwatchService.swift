@@ -1157,11 +1157,9 @@ final class StopwatchService: ObservableObject {
             activeLapIDs: context.activeLapIDs,
             state: context.state,
             pauseStartedAt: context.pauseStartedAt,
-            lastLapActivationAt: nil,
             lastDistributedWholeSeconds: max(0, context.lastDistributedWholeSeconds),
             distributionCursor: max(0, context.distributionCursor),
-            totalPausedDuration: context.totalPausedDuration,
-            completedPauseIntervals: []
+            totalPausedDuration: context.totalPausedDuration
         )
     }
 

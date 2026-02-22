@@ -620,11 +620,9 @@ struct SplitLogTests {
             activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
-            lastLapActivationAt: nil,
             lastDistributedWholeSeconds: 0,
             distributionCursor: 0,
-            totalPausedDuration: 0,
-            completedPauseIntervals: []
+            totalPausedDuration: 0
         )
         let context2 = PersistedSessionContext(
             session: session2,
@@ -633,11 +631,9 @@ struct SplitLogTests {
             activeLapIDs: [],
             state: .idle,
             pauseStartedAt: nil,
-            lastLapActivationAt: nil,
             lastDistributedWholeSeconds: 0,
             distributionCursor: 0,
-            totalPausedDuration: 0,
-            completedPauseIntervals: []
+            totalPausedDuration: 0
         )
 
         store.overwriteSnapshot(
@@ -693,11 +689,9 @@ struct SplitLogTests {
             activeLapIDs: [],
             state: .stopped,
             pauseStartedAt: t2,
-            lastLapActivationAt: nil,
             lastDistributedWholeSeconds: 20,
             distributionCursor: 0,
-            totalPausedDuration: 0,
-            completedPauseIntervals: []
+            totalPausedDuration: 0
         )
 
         store.overwriteSnapshot(
