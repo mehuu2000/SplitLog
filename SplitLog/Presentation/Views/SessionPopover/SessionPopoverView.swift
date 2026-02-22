@@ -566,7 +566,7 @@ struct SessionPopoverView: View {
     }
 
     private var ringBlockDuration: TimeInterval {
-        TimeInterval(max(1, appSettingsStore.timelineRingHoursPerCycle)) * 60 * 60
+        30
     }
 
     private var selectedSessionTitleText: String {
@@ -780,7 +780,7 @@ struct SessionPopoverView: View {
         }
 
         if stopwatch.state == .running || stopwatch.state == .paused {
-            stopwatch.finishSession()
+            stopwatch.finishSession(at: stopwatch.clock)
             invalidateComputedCaches()
             return
         }
