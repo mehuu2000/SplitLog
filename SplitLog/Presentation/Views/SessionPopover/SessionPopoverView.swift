@@ -61,7 +61,7 @@ struct SessionPopoverView: View {
         (255, 0, 64),
     ]
     private static let expandedPopoverSize = CGSize(width: 540, height: 380)
-    private static let compactPopoverSize = CGSize(width: 360, height: 330)
+    private static let compactPopoverSize = CGSize(width: 380, height: 380)
 
     @StateObject private var stopwatch: StopwatchService
     @StateObject private var appSettingsStore: AppSettingsStore
