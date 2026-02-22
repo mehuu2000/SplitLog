@@ -88,6 +88,22 @@ struct SessionThemeColorResolver {
         isMonochrome ? Color.primary.opacity(0.92) : Color.white
     }
 
+    var sectionBorderColor: Color {
+        isMonochrome ? Color.primary.opacity(0.24) : Color.primary.opacity(0.16)
+    }
+
+    var sectionBackgroundColor: Color {
+        isMonochrome ? Color.primary.opacity(0.06) : Color.white.opacity(0.55)
+    }
+
+    var lapCardBorderColor: Color {
+        isMonochrome ? Color.primary.opacity(0.24) : Color.primary.opacity(0.14)
+    }
+
+    var lapCardBackgroundColor: Color {
+        isMonochrome ? Color.primary.opacity(0.05) : Color.white.opacity(0.52)
+    }
+
     func lapColor(for index: Int, rgbWheel: [(Double, Double, Double)]) -> Color {
         let zeroBasedIndex = max(0, index - 1)
         let cycle = zeroBasedIndex / rgbWheel.count

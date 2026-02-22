@@ -145,6 +145,8 @@ struct SessionPopoverView: View {
             rowPrimaryTextColor: colorResolver.lapPrimaryTextColor,
             rowSecondaryIconColor: colorResolver.lapSecondaryIconColor,
             inlineEditorBackgroundColor: colorResolver.inlineEditorBackgroundColor,
+            rowCardBorderColor: colorResolver.lapCardBorderColor,
+            rowCardBackgroundColor: colorResolver.lapCardBackgroundColor,
             editingLapID: $editingLapID,
             editingLapLabelDraft: $editingLapLabelDraft,
             editingFocusToken: editingFocusToken,
@@ -239,10 +241,7 @@ struct SessionPopoverView: View {
                             lapDisplayedSeconds: lapDisplayedSeconds,
                             totalElapsedSeconds: totalElapsedSeconds
                         )
-                        Text("全体経過")
-                            .foregroundStyle(colorResolver.subtitleTextColor)
-                        Text(formatDuration(seconds: totalElapsedSeconds))
-                            .monospacedDigit()
+                        elapsedTimeBadge(totalElapsedSeconds: totalElapsedSeconds)
                     } else {
                         sessionTitleSection
 
@@ -253,10 +252,7 @@ struct SessionPopoverView: View {
                                 lapDisplayedSeconds: lapDisplayedSeconds,
                                 totalElapsedSeconds: totalElapsedSeconds
                             )
-                            Text("全体経過")
-                                .foregroundStyle(colorResolver.subtitleTextColor)
-                            Text(formatDuration(seconds: totalElapsedSeconds))
-                                .monospacedDigit()
+                            elapsedTimeBadge(totalElapsedSeconds: totalElapsedSeconds)
                         }
                     }
                 }
@@ -273,7 +269,16 @@ struct SessionPopoverView: View {
                             boundaryColor: colorResolver.timelineBorderColor,
                             perimeterBorderColor: colorResolver.timelineBorderColor
                         )
-                        .frame(width: 210, height: 210)
+                        .frame(width: 198, height: 198)
+                        .padding(6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorResolver.sectionBackgroundColor)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(colorResolver.sectionBorderColor, lineWidth: 1)
+                        )
 
                         lapListView
                     }
@@ -645,6 +650,26 @@ struct SessionPopoverView: View {
         .help("サマリー")
         .accessibilityLabel("サマリー")
         .disabled(stopwatch.session == nil)
+    }
+
+    @ViewBuilder
+    private func elapsedTimeBadge(totalElapsedSeconds: Int) -> some View {
+        HStack(spacing: 6) {
+            Text("全体経過")
+                .foregroundStyle(colorResolver.subtitleTextColor)
+            Text(formatDuration(seconds: totalElapsedSeconds))
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(colorResolver.sectionBackgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(colorResolver.sectionBorderColor, lineWidth: 1)
+        )
     }
 
     @ViewBuilder

@@ -18,6 +18,8 @@ struct SessionLapListView: View {
     let rowPrimaryTextColor: Color
     let rowSecondaryIconColor: Color
     let inlineEditorBackgroundColor: Color
+    let rowCardBorderColor: Color
+    let rowCardBackgroundColor: Color
     @Binding var editingLapID: UUID?
     @Binding var editingLapLabelDraft: String
     let editingFocusToken: Int
@@ -59,6 +61,8 @@ struct SessionLapListView: View {
                                     primaryTextColor: rowPrimaryTextColor,
                                     secondaryIconColor: rowSecondaryIconColor,
                                     inlineEditorBackgroundColor: inlineEditorBackgroundColor,
+                                    rowCardBorderColor: rowCardBorderColor,
+                                    rowCardBackgroundColor: rowCardBackgroundColor,
                                     onSelectLap: {
                                         onSelectLap(lap.id)
                                     },
@@ -115,6 +119,8 @@ private struct SessionLapRowView: View {
     let primaryTextColor: Color
     let secondaryIconColor: Color
     let inlineEditorBackgroundColor: Color
+    let rowCardBorderColor: Color
+    let rowCardBackgroundColor: Color
     let onSelectLap: () -> Void
     let onToggleLapActive: () -> Void
     let onOpenMemo: () -> Void
@@ -177,6 +183,16 @@ private struct SessionLapRowView: View {
                 .frame(height: 2)
                 .clipShape(RoundedRectangle(cornerRadius: 1))
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(rowCardBackgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(rowCardBorderColor, lineWidth: 1)
+        )
     }
 
     private var leadingControlIconName: String {
