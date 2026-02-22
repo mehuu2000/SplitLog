@@ -1136,8 +1136,16 @@ struct SessionPopoverView: View {
         var remaining = max(0, totalElapsedSeconds - baseTotal)
         guard remaining > 0 else { return result }
 
+        let carryEligibleLapIDs: Set<UUID>
+        if appSettingsStore.splitAccumulationMode == .checkbox, stopwatch.state == .running {
+            let activeIDs = stopwatch.activeLapIDs
+            carryEligibleLapIDs = activeIDs.isEmpty ? Set(entries.map(\.lap.id)) : activeIDs
+        } else {
+            carryEligibleLapIDs = Set(entries.map(\.lap.id))
+        }
+
         let sortedByFraction = entries
-            .filter { $0.fraction > 0 }
+            .filter { $0.fraction > 0 && carryEligibleLapIDs.contains($0.lap.id) }
             .sorted { lhs, rhs in
                 if lhs.fraction == rhs.fraction {
                     return lhs.lap.index > rhs.lap.index
