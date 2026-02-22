@@ -129,7 +129,8 @@ struct SessionPopoverView: View {
         )
         let timeline = showTimelineRing
             ? resolvedTimelineSlices(
-                referenceDate: referenceDate,
+                totalElapsedSeconds: totalElapsedSeconds,
+                lapDisplayedSeconds: lapDisplayedSeconds,
                 key: timelineKey
             )
             : (inner: [], outer: [], showOuterTrack: false)
@@ -499,7 +500,11 @@ struct SessionPopoverView: View {
                 key: lapSecondsKey
             )
             if showTimelineRing {
-                refreshTimelineCache(referenceDate: referenceDate, key: timelineKey)
+                refreshTimelineCache(
+                    totalElapsedSeconds: totalElapsedSeconds,
+                    lapDisplayedSeconds: lapDisplayedSeconds,
+                    key: timelineKey
+                )
             }
         }
         .onDisappear {
@@ -510,10 +515,17 @@ struct SessionPopoverView: View {
         .onChange(of: appSettingsStore.showTimelineRing) { _, isVisible in
             stopwatch.setDisplayActive(true, showTimelineRing: isVisible)
             if isVisible {
-                refreshTimelineCache(
+                let totalElapsedSeconds = durationSeconds(stopwatch.elapsedSession(at: stopwatch.clock))
+                let lapSecondsKey = makeLapSecondsComputationKey(totalElapsedSeconds: totalElapsedSeconds)
+                let lapDisplayedSeconds = resolvedLapDisplayedSeconds(
                     referenceDate: stopwatch.clock,
+                    key: lapSecondsKey
+                )
+                refreshTimelineCache(
+                    totalElapsedSeconds: totalElapsedSeconds,
+                    lapDisplayedSeconds: lapDisplayedSeconds,
                     key: makeTimelineComputationKey(
-                        totalElapsedSeconds: durationSeconds(stopwatch.elapsedSession(at: stopwatch.clock))
+                        totalElapsedSeconds: totalElapsedSeconds
                     )
                 )
             }
@@ -534,7 +546,16 @@ struct SessionPopoverView: View {
         }
         .onChange(of: timelineKey) { _, newKey in
             guard appSettingsStore.showTimelineRing else { return }
-            refreshTimelineCache(referenceDate: stopwatch.clock, key: newKey)
+            let lapSecondsKey = makeLapSecondsComputationKey(totalElapsedSeconds: newKey.totalElapsedSeconds)
+            let lapDisplayedSeconds = resolvedLapDisplayedSeconds(
+                referenceDate: stopwatch.clock,
+                key: lapSecondsKey
+            )
+            refreshTimelineCache(
+                totalElapsedSeconds: newKey.totalElapsedSeconds,
+                lapDisplayedSeconds: lapDisplayedSeconds,
+                key: newKey
+            )
         }
         .onChange(of: selectedSessionTitleText) { _, _ in
             refreshSessionTitleUnderlineWidth()
@@ -1071,17 +1092,20 @@ struct SessionPopoverView: View {
         commitLapMemoEdit()
     }
 
-    private func timelineSlices(referenceDate: Date) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {
+    private func timelineSlices(
+        totalElapsedSeconds: Int,
+        lapDisplayedSeconds: [UUID: Int]
+    ) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {
         guard stopwatch.session != nil else {
             return ([], [], false)
         }
 
-        let elapsed = stopwatch.elapsedSession(at: referenceDate)
+        let elapsed = TimeInterval(max(0, totalElapsedSeconds))
         guard elapsed > 0 else {
             return ([], [], false)
         }
 
-        let lapRanges = lapCumulativeRanges(referenceDate: referenceDate)
+        let lapRanges = lapCumulativeRanges(lapDisplayedSeconds: lapDisplayedSeconds)
 
         if elapsed < ringBlockDuration {
             let innerWindow = 0..<ringBlockDuration
@@ -1103,12 +1127,12 @@ struct SessionPopoverView: View {
         )
     }
 
-    private func lapCumulativeRanges(referenceDate: Date) -> [(lap: WorkLap, start: TimeInterval, end: TimeInterval)] {
+    private func lapCumulativeRanges(lapDisplayedSeconds: [UUID: Int]) -> [(lap: WorkLap, start: TimeInterval, end: TimeInterval)] {
         var ranges: [(lap: WorkLap, start: TimeInterval, end: TimeInterval)] = []
         var cursor: TimeInterval = 0
 
         for lap in stopwatch.laps {
-            let duration = max(0, stopwatch.elapsedLap(lap, at: referenceDate))
+            let duration = TimeInterval(max(0, lapDisplayedSeconds[lap.id] ?? 0))
             let start = cursor
             let end = start + duration
             ranges.append((lap: lap, start: start, end: end))
@@ -1189,20 +1213,28 @@ struct SessionPopoverView: View {
     }
 
     private func resolvedTimelineSlices(
-        referenceDate: Date,
+        totalElapsedSeconds: Int,
+        lapDisplayedSeconds: [UUID: Int],
         key: TimelineComputationKey
     ) -> (inner: [TimelineRingSlice], outer: [TimelineRingSlice], showOuterTrack: Bool) {
         if timelineCacheKey == key {
             return timelineCacheValue
         }
-        return timelineSlices(referenceDate: referenceDate)
+        return timelineSlices(
+            totalElapsedSeconds: totalElapsedSeconds,
+            lapDisplayedSeconds: lapDisplayedSeconds
+        )
     }
 
     private func refreshTimelineCache(
-        referenceDate: Date,
+        totalElapsedSeconds: Int,
+        lapDisplayedSeconds: [UUID: Int],
         key: TimelineComputationKey
     ) {
-        timelineCacheValue = timelineSlices(referenceDate: referenceDate)
+        timelineCacheValue = timelineSlices(
+            totalElapsedSeconds: totalElapsedSeconds,
+            lapDisplayedSeconds: lapDisplayedSeconds
+        )
         timelineCacheKey = key
     }
 
