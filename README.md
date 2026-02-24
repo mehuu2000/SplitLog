@@ -20,7 +20,7 @@ SplitLog は、macOS のメニューバーに常駐して使う作業ログア�
 ## 3. インストール方法（Slack配布ZIP）
 
 1. Slack などで受け取った `SplitLog.zip` をダウンロードします。
-2. `SplitLog.zip` をダブルクリックして解凍します。
+2. `SplitLog.zip` を解凍します。
 3. 解凍してできた `SplitLog.app` を `アプリケーション` フォルダへ移動します。
 4. `アプリケーション` フォルダ内の `SplitLog.app` を起動します。
 
@@ -101,3 +101,7 @@ xattr -dr com.apple.quarantine /Applications/SplitLog.app
 
 ### Q. 別の Mac にデータを移せますか？
 A. 可能です。`sessions.json` と設定ファイルをバックアップし、移行先の同じ場所へコピーしてください。
+
+
+### Q. 開発者に相談や文句を言いたい
+A. 連絡が取れるか、対面で会うことができればその際にお話しください。
