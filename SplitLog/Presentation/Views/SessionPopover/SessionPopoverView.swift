@@ -464,6 +464,7 @@ struct SessionPopoverView: View {
                     onDeleteLapData: handleDeleteAllLapData,
                     onResetSettings: handleResetAllSettings,
                     onInitializeAllData: handleInitializeAllData,
+                    onQuitApp: handleQuitApp,
                     onClose: {
                         isShowingSettingsModal = false
                     }
@@ -907,6 +908,12 @@ struct SessionPopoverView: View {
         }
     }
 
+    private func handleQuitApp() {
+        commitPendingInlineEdits()
+        commitActiveLapMemoEditIfNeeded()
+        NSApplication.shared.terminate(nil)
+    }
+
     private func showToast(_ message: String, style: ToastStyle = .success) {
         toastGeneration += 1
         let generation = toastGeneration
@@ -1062,7 +1069,7 @@ struct SessionPopoverView: View {
                         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                         .filter { !$0.isEmpty }
                     for paragraph in paragraphs {
-                        lines.append("- \(paragraph)")
+                        lines.append(" - \(paragraph)")
                     }
                 }
             }

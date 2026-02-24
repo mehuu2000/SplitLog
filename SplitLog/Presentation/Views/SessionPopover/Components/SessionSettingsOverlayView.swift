@@ -59,6 +59,7 @@ struct SessionSettingsOverlayView: View {
     let onDeleteLapData: () -> Void
     let onResetSettings: () -> Void
     let onInitializeAllData: () -> Void
+    let onQuitApp: () -> Void
     let onClose: () -> Void
     @State private var pendingStorageAction: StorageAction?
     @State private var previewDate: Date = Date()
@@ -155,6 +156,10 @@ struct SessionSettingsOverlayView: View {
                                 .pickerStyle(.menu)
                                 .labelsHidden()
                             }
+
+                            Text("ラジオ: 選択中のSplitに加算 / チェック: チェック中Splitへ順番に配分")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
@@ -240,6 +245,20 @@ struct SessionSettingsOverlayView: View {
                                 destructive: true
                             ) {
                                 pendingStorageAction = .initializeAllData
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("アプリ")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            storageActionRow(
+                                title: "SplitLogを終了",
+                                systemImage: "power",
+                                destructive: false
+                            ) {
+                                onQuitApp()
                             }
                         }
                     }
