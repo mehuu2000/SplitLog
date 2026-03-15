@@ -55,10 +55,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private var registeredHotKeys: [EventHotKeyRef] = []
     private var hotKeyActions: [UInt32: ShortcutAction] = [:]
     private var nextHotKeyID: UInt32 = 1
-    private var temporaryPopoverCloseWorkItem: DispatchWorkItem?
-    private var temporaryPopoverInteractionMonitor: Any?
-    private var temporaryPopoverStartedAt: TimeInterval = 0
-    private var isTemporarilyShowingPopover = false
+    private var outsideClickLocalMonitor: Any?
+    private var outsideClickGlobalMonitor: Any?
 
     override init() {
         self.stopwatch = StopwatchService()
@@ -71,14 +69,13 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     func applicationWillTerminate() {
-        cancelTemporaryPopoverAutoClose()
         unregisterHotKeys()
         stopwatch.prepareForTermination()
     }
 
     private func configurePopover() {
         popover.delegate = self
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         let popoverSize = SessionPopoverView.popoverSize
         popover.contentSize = NSSize(width: popoverSize.width, height: popoverSize.height)
         popover.contentViewController = NSHostingController(
@@ -105,7 +102,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
-        cancelTemporaryPopoverAutoClose()
+        removeOutsideClickMonitors()
     }
 
     private func configureHotKeys() {
@@ -188,13 +185,13 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 return true
             }
         case .stop:
-            handleStateShortcut {
+            handleStateShortcut(showPopoverWhenNoAction: true) {
                 guard self.stopwatch.state == .running || self.stopwatch.state == .paused else { return false }
                 self.stopwatch.finishSession()
                 return true
             }
         case .resume:
-            handleStateShortcut {
+            handleStateShortcut(showPopoverWhenNoAction: true) {
                 guard self.stopwatch.state == .stopped || self.stopwatch.state == .paused else { return false }
                 self.stopwatch.resumeSession()
                 return true
@@ -210,26 +207,25 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         }
     }
 
-    private func handleStateShortcut(_ action: () -> Bool) {
+    private func handleStateShortcut(
+        showPopoverWhenNoAction: Bool = false,
+        _ action: () -> Bool
+    ) {
         let wasShown = popover.isShown
-        guard action() else { return }
-        if wasShown {
-            if isTemporarilyShowingPopover {
-                beginTemporaryPopoverAutoClose()
-            }
+        guard action() else {
+            guard showPopoverWhenNoAction, !wasShown else { return }
+            showPopover(deferUntilNextRunLoop: true)
             return
         }
-        showPopover(temporary: true)
+        guard !wasShown else { return }
+        showPopover(deferUntilNextRunLoop: true)
     }
 
     private func handleOpenCurrentLapMemoShortcut() {
         guard stopwatch.currentLap != nil else { return }
 
-        let wasShown = popover.isShown
-        if !wasShown {
-            showPopover(temporary: true)
-        } else if isTemporarilyShowingPopover {
-            beginTemporaryPopoverAutoClose()
+        if !popover.isShown {
+            showPopover(deferUntilNextRunLoop: true)
         }
 
         DispatchQueue.main.async { [weak self] in
@@ -243,10 +239,25 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             return
         }
 
-        showPopover(temporary: false, activateApp: triggeredByShortcut)
+        showPopover(activateApp: triggeredByShortcut, deferUntilNextRunLoop: triggeredByShortcut)
     }
 
-    private func showPopover(temporary: Bool, activateApp: Bool = true) {
+    private func showPopover(
+        activateApp: Bool = true,
+        deferUntilNextRunLoop: Bool = false
+    ) {
+        if deferUntilNextRunLoop {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.popover.isShown else { return }
+                self.showPopoverNow(activateApp: activateApp)
+            }
+            return
+        }
+
+        showPopoverNow(activateApp: activateApp)
+    }
+
+    private func showPopoverNow(activateApp: Bool) {
         guard let button = statusItem.button else { return }
 
         if activateApp {
@@ -256,61 +267,68 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
-        }
-
-        if temporary {
-            beginTemporaryPopoverAutoClose()
-        } else {
-            cancelTemporaryPopoverAutoClose()
+            installOutsideClickMonitors()
         }
     }
 
     private func closePopover() {
-        cancelTemporaryPopoverAutoClose()
+        removeOutsideClickMonitors()
         popover.performClose(statusItem.button)
     }
 
-    private func beginTemporaryPopoverAutoClose() {
-        cancelTemporaryPopoverAutoClose()
-        isTemporarilyShowingPopover = true
-        temporaryPopoverStartedAt = ProcessInfo.processInfo.systemUptime
+    private func installOutsideClickMonitors() {
+        guard outsideClickLocalMonitor == nil, outsideClickGlobalMonitor == nil else { return }
 
-        installTemporaryPopoverInteractionMonitor()
-
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self, self.isTemporarilyShowingPopover, self.popover.isShown else { return }
-            self.closePopover()
-        }
-        temporaryPopoverCloseWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: workItem)
-    }
-
-    private func cancelTemporaryPopoverAutoClose() {
-        isTemporarilyShowingPopover = false
-        temporaryPopoverCloseWorkItem?.cancel()
-        temporaryPopoverCloseWorkItem = nil
-        if let temporaryPopoverInteractionMonitor {
-            NSEvent.removeMonitor(temporaryPopoverInteractionMonitor)
-            self.temporaryPopoverInteractionMonitor = nil
-        }
-    }
-
-    private func installTemporaryPopoverInteractionMonitor() {
-        guard temporaryPopoverInteractionMonitor == nil else { return }
-
-        temporaryPopoverInteractionMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown, .scrollWheel]
+        outsideClickLocalMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] event in
             guard let self else { return event }
-            guard self.isTemporarilyShowingPopover else { return event }
-
-            // Ignore the initial shortcut key event that triggered the transient feedback popover.
-            if event.timestamp <= self.temporaryPopoverStartedAt + 0.05 {
+            guard self.popover.isShown else { return event }
+            guard !self.isEventInsidePopover(event), !self.isEventOnStatusItemButton(event) else {
                 return event
             }
 
-            self.cancelTemporaryPopoverAutoClose()
+            self.closePopover()
             return event
         }
+
+        outsideClickGlobalMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.popover.isShown else { return }
+                self.closePopover()
+            }
+        }
+    }
+
+    private func removeOutsideClickMonitors() {
+        if let outsideClickLocalMonitor {
+            NSEvent.removeMonitor(outsideClickLocalMonitor)
+            self.outsideClickLocalMonitor = nil
+        }
+
+        if let outsideClickGlobalMonitor {
+            NSEvent.removeMonitor(outsideClickGlobalMonitor)
+            self.outsideClickGlobalMonitor = nil
+        }
+    }
+
+    private func isEventInsidePopover(_ event: NSEvent) -> Bool {
+        guard let popoverWindow = popover.contentViewController?.view.window else { return false }
+        return event.window === popoverWindow
+    }
+
+    private func isEventOnStatusItemButton(_ event: NSEvent) -> Bool {
+        guard
+            let button = statusItem.button,
+            let buttonWindow = button.window,
+            event.window === buttonWindow
+        else {
+            return false
+        }
+
+        let location = button.convert(event.locationInWindow, from: nil)
+        return button.bounds.contains(location)
     }
 }
