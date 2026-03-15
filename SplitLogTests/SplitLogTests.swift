@@ -770,7 +770,7 @@ struct SplitLogTests {
     }
 
     @MainActor
-    @Test func persistedSessionContext_withoutSplitAccumulationMode_defaultsToCheckbox() throws {
+    @Test func persistedSessionContext_withoutSplitAccumulationMode_defaultsToRadio() throws {
         let payload = """
         {
           "session": {
@@ -794,7 +794,7 @@ struct SplitLogTests {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(PersistedSessionContext.self, from: Data(payload.utf8))
 
-        #expect(decoded.splitAccumulationMode == .checkbox)
+        #expect(decoded.splitAccumulationMode == .radio)
     }
 
     @MainActor

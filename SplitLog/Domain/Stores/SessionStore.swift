@@ -75,7 +75,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         laps = try container.decode([WorkLap].self, forKey: .laps)
         selectedLapID = try container.decodeIfPresent(UUID.self, forKey: .selectedLapID)
         activeLapIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .activeLapIDs) ?? []
-        splitAccumulationMode = try container.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .checkbox
+        splitAccumulationMode = try container.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .radio
         state = try container.decode(SessionState.self, forKey: .state)
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         lastDistributedWholeSeconds = max(0, try container.decodeIfPresent(Int.self, forKey: .lastDistributedWholeSeconds) ?? 0)
