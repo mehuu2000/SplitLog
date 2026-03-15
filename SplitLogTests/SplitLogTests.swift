@@ -147,6 +147,85 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func shortcutLapSelection_radioModeSelectsTargetLap() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+
+        service.startSession(splitAccumulationMode: .radio, at: t0)
+        service.finishLap(at: t1)
+        service.finishLap(at: t2)
+
+        let didHandle = service.selectOrToggleLapForShortcut(displayIndex: 1, at: t2)
+
+        #expect(didHandle)
+        #expect(service.selectedLapID == service.laps[0].id)
+    }
+
+    @MainActor
+    @Test func shortcutLapSelection_checkboxModeTogglesTargetLapAndSelectsIt() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+
+        service.startSession(splitAccumulationMode: .checkbox, at: t0)
+        service.finishLap(at: t1)
+
+        let lap1ID = service.laps[0].id
+        let lap2ID = service.laps[1].id
+        #expect(service.activeLapIDs == Set([lap1ID, lap2ID]))
+
+        let didHandle = service.selectOrToggleLapForShortcut(displayIndex: 1, at: t1)
+
+        #expect(didHandle)
+        #expect(service.selectedLapID == lap1ID)
+        #expect(service.activeLapIDs == Set([lap2ID]))
+    }
+
+    @MainActor
+    @Test func shortcutLapSelection_zeroTargetsLatestLap() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+
+        service.startSession(splitAccumulationMode: .radio, at: t0)
+        service.finishLap(at: t1)
+        service.finishLap(at: t2)
+        service.selectLap(lapID: service.laps[0].id, at: t2)
+
+        let didHandle = service.selectOrToggleLapForShortcut(displayIndex: 0, at: t2)
+
+        #expect(didHandle)
+        #expect(service.selectedLapID == service.laps[2].id)
+    }
+
+    @MainActor
+    @Test func shortcutLapMovement_movesWithinBoundsOnly() {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+
+        service.startSession(splitAccumulationMode: .radio, at: t0)
+        service.finishLap(at: t1)
+        service.finishLap(at: t2)
+
+        let movedUp = service.moveSelectedLapForShortcut(by: -1, at: t2)
+        #expect(movedUp)
+        #expect(service.selectedLapID == service.laps[1].id)
+
+        let movedDown = service.moveSelectedLapForShortcut(by: 1, at: t2)
+        #expect(movedDown)
+        #expect(service.selectedLapID == service.laps[2].id)
+
+        let didMovePastBottom = service.moveSelectedLapForShortcut(by: 1, at: t2)
+        #expect(didMovePastBottom == false)
+        #expect(service.selectedLapID == service.laps[2].id)
+    }
+
+    @MainActor
     @Test func checkboxMode_finishLap_keepsExistingChecksAndAddsNewLapCheck() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let t0 = Date(timeIntervalSince1970: 1_000)

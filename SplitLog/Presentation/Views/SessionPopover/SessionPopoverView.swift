@@ -64,6 +64,7 @@ struct SessionPopoverView: View {
 
     @StateObject private var stopwatch: StopwatchService
     @StateObject private var appSettingsStore: AppSettingsStore
+    @ObservedObject private var commandCenter: SessionPopoverCommandCenter
     @State private var editingLapID: UUID?
     @State private var editingLapLabelDraft = ""
     @State private var editingFocusToken: Int = 0
@@ -93,19 +94,42 @@ struct SessionPopoverView: View {
     private let sessionTitleAreaWidth: CGFloat = 250
     private let sessionTitleAreaHeight: CGFloat = 28
 
-    init(stopwatch: StopwatchService, appSettingsStore: AppSettingsStore) {
+    init(
+        stopwatch: StopwatchService,
+        appSettingsStore: AppSettingsStore,
+        commandCenter: SessionPopoverCommandCenter
+    ) {
         _stopwatch = StateObject(wrappedValue: stopwatch)
         _appSettingsStore = StateObject(wrappedValue: appSettingsStore)
+        _commandCenter = ObservedObject(wrappedValue: commandCenter)
+    }
+
+    init(stopwatch: StopwatchService, appSettingsStore: AppSettingsStore) {
+        self.init(
+            stopwatch: stopwatch,
+            appSettingsStore: appSettingsStore,
+            commandCenter: SessionPopoverCommandCenter()
+        )
+    }
+
+    init(stopwatch: StopwatchService, commandCenter: SessionPopoverCommandCenter) {
+        _stopwatch = StateObject(wrappedValue: stopwatch)
+        _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
+        _commandCenter = ObservedObject(wrappedValue: commandCenter)
     }
 
     init(stopwatch: StopwatchService) {
-        _stopwatch = StateObject(wrappedValue: stopwatch)
+        self.init(stopwatch: stopwatch, commandCenter: SessionPopoverCommandCenter())
+    }
+
+    init(commandCenter: SessionPopoverCommandCenter) {
+        _stopwatch = StateObject(wrappedValue: StopwatchService())
         _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
+        _commandCenter = ObservedObject(wrappedValue: commandCenter)
     }
 
     init() {
-        _stopwatch = StateObject(wrappedValue: StopwatchService())
-        _appSettingsStore = StateObject(wrappedValue: AppSettingsStore())
+        self.init(commandCenter: SessionPopoverCommandCenter())
     }
 
     var body: some View {
@@ -462,6 +486,9 @@ struct SessionPopoverView: View {
             DispatchQueue.main.async {
                 appSettingsStore.consumePersistenceErrorEvent(id: event.id)
             }
+        }
+        .onReceive(commandCenter.$commandRequest.compactMap { $0 }) { request in
+            handleCommandRequest(request)
         }
     }
 
@@ -943,9 +970,27 @@ struct SessionPopoverView: View {
 
     private func beginLapMemoEdit(for lap: WorkLap) {
         commitPendingInlineEdits()
+        isShowingSessionOverflowList = false
+        isShowingSettingsModal = false
+        isShowingSessionSummaryModal = false
+        isShowingResetConfirmation = false
+        isShowingDeleteSessionConfirmation = false
         memoEditingLapID = lap.id
         memoLapLabelDraft = lap.label
         memoLapTextDraft = lap.memo
+    }
+
+    private func handleCommandRequest(_ request: SessionPopoverCommandCenter.CommandRequest) {
+        switch request.command {
+        case .openCurrentLapMemo:
+            guard let currentLap = stopwatch.currentLap else {
+                commandCenter.consume(id: request.id)
+                return
+            }
+            beginLapMemoEdit(for: currentLap)
+        }
+
+        commandCenter.consume(id: request.id)
     }
 
     private func openSessionSummary(

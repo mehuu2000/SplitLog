@@ -355,6 +355,38 @@ final class StopwatchService: ObservableObject {
         commitSelectedContextUpdate(context, for: selectedSessionID, at: date)
     }
 
+    @discardableResult
+    func selectOrToggleLapForShortcut(displayIndex: Int, at date: Date = Date()) -> Bool {
+        guard let lapID = lapIDForShortcutDisplayIndex(displayIndex) else { return false }
+
+        switch splitAccumulationMode {
+        case .radio:
+            selectLap(lapID: lapID, at: date)
+        case .checkbox:
+            toggleLapActive(lapID: lapID, at: date)
+            selectLap(lapID: lapID, at: date)
+        }
+
+        return true
+    }
+
+    @discardableResult
+    func moveSelectedLapForShortcut(by offset: Int, at date: Date = Date()) -> Bool {
+        guard offset != 0 else { return false }
+        guard
+            let selectedLapID,
+            let currentIndex = laps.firstIndex(where: { $0.id == selectedLapID })
+        else {
+            return false
+        }
+
+        let targetIndex = currentIndex + offset
+        guard laps.indices.contains(targetIndex) else { return false }
+
+        selectLap(lapID: laps[targetIndex].id, at: date)
+        return true
+    }
+
     func pauseSession(at date: Date = Date()) {
         guard
             let selectedSessionID,
@@ -746,6 +778,18 @@ final class StopwatchService: ObservableObject {
 
     private func defaultLapLabel(for index: Int) -> String {
         "作業\(index)"
+    }
+
+    private func lapIDForShortcutDisplayIndex(_ displayIndex: Int) -> UUID? {
+        guard !laps.isEmpty else { return nil }
+
+        if displayIndex == 0 {
+            return laps.last?.id
+        }
+
+        let targetIndex = displayIndex - 1
+        guard laps.indices.contains(targetIndex) else { return nil }
+        return laps[targetIndex].id
     }
 
     private func defaultSessionTitle(at date: Date) -> String {
