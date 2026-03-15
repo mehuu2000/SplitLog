@@ -74,6 +74,8 @@ struct SessionPopoverView: View {
     @State private var isShowingResetConfirmation = false
     @State private var isShowingDeleteSessionConfirmation = false
     @State private var isShowingSessionOverflowList = false
+    @State private var isShowingHelpMenuModal = false
+    @State private var isShowingOperationGuideModal = false
     @State private var isShowingSettingsModal = false
     @State private var isShowingSessionSummaryModal = false
     @State private var memoEditingLapID: UUID?
@@ -189,6 +191,20 @@ struct SessionPopoverView: View {
                 HStack {
                     Label("SplitLog", systemImage: "timer")
                         .font(.headline)
+
+                    Button(action: openHelpMenu) {
+                        Image(systemName: "questionmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .frame(width: 16, height: 16)
+                            .background(
+                                Circle()
+                                    .fill(colorResolver.headerControlBackground)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help("使い方")
+                    .accessibilityLabel("使い方")
+
                     Spacer()
 
                     HStack(spacing: 8) {
@@ -419,6 +435,23 @@ struct SessionPopoverView: View {
                 )
             }
 
+            if isShowingHelpMenuModal {
+                SessionHelpHubOverlayView(
+                    onOpenOperationGuide: openOperationGuide,
+                    onClose: {
+                        isShowingHelpMenuModal = false
+                    }
+                )
+            }
+
+            if isShowingOperationGuideModal {
+                SessionOperationGuideOverlayView(
+                    onClose: {
+                        isShowingOperationGuideModal = false
+                    }
+                )
+            }
+
             if let toastMessage {
                 VStack {
                     Text(toastMessage)
@@ -620,6 +653,23 @@ struct SessionPopoverView: View {
         .disabled(stopwatch.session == nil)
         .help(mode == .radio ? "ラジオ配分" : "チェック配分")
         .accessibilityLabel(mode == .radio ? "ラジオ配分" : "チェック配分")
+    }
+
+    private func openHelpMenu() {
+        isShowingSessionOverflowList = false
+        isShowingSettingsModal = false
+        isShowingSessionSummaryModal = false
+        isShowingResetConfirmation = false
+        isShowingDeleteSessionConfirmation = false
+        commitActiveLapMemoEditIfNeeded()
+        memoEditingLapID = nil
+        isShowingOperationGuideModal = false
+        isShowingHelpMenuModal = true
+    }
+
+    private func openOperationGuide() {
+        isShowingHelpMenuModal = false
+        isShowingOperationGuideModal = true
     }
 
     private func splitAccumulationModeIconName(
