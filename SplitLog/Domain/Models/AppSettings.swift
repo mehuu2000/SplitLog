@@ -32,20 +32,20 @@ struct AppSettings: Equatable, Codable, Sendable {
     var timelineRingHoursPerCycle: Int
     var summaryTimeFormat: SummaryTimeFormat
     var summaryMemoFormat: SummaryMemoFormat
-    var splitAccumulationMode: SplitAccumulationMode
+    var defaultSplitAccumulationMode: SplitAccumulationMode
 
     init(
         themeMode: ThemeMode = .color,
         timelineRingHoursPerCycle: Int = 3,
         summaryTimeFormat: SummaryTimeFormat = .decimalHours,
         summaryMemoFormat: SummaryMemoFormat = .bulleted,
-        splitAccumulationMode: SplitAccumulationMode = .radio
+        defaultSplitAccumulationMode: SplitAccumulationMode = .radio
     ) {
         self.themeMode = themeMode
         self.timelineRingHoursPerCycle = max(1, timelineRingHoursPerCycle)
         self.summaryTimeFormat = summaryTimeFormat
         self.summaryMemoFormat = summaryMemoFormat
-        self.splitAccumulationMode = splitAccumulationMode
+        self.defaultSplitAccumulationMode = defaultSplitAccumulationMode
     }
 
     static let `default` = AppSettings()
@@ -55,15 +55,23 @@ struct AppSettings: Equatable, Codable, Sendable {
         case timelineRingHoursPerCycle
         case summaryTimeFormat
         case summaryMemoFormat
+        case defaultSplitAccumulationMode
+    }
+
+    private enum LegacyCodingKeys: String, CodingKey {
         case splitAccumulationMode
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
         self.themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? .color
         self.timelineRingHoursPerCycle = max(1, try container.decodeIfPresent(Int.self, forKey: .timelineRingHoursPerCycle) ?? 3)
         self.summaryTimeFormat = try container.decodeIfPresent(SummaryTimeFormat.self, forKey: .summaryTimeFormat) ?? .decimalHours
         self.summaryMemoFormat = try container.decodeIfPresent(SummaryMemoFormat.self, forKey: .summaryMemoFormat) ?? .bulleted
-        self.splitAccumulationMode = try container.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .radio
+        self.defaultSplitAccumulationMode = try container.decodeIfPresent(
+            SplitAccumulationMode.self,
+            forKey: .defaultSplitAccumulationMode
+        ) ?? (try legacyContainer.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .radio)
     }
 }

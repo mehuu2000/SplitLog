@@ -25,6 +25,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
     var laps: [WorkLap]
     var selectedLapID: UUID?
     var activeLapIDs: Set<UUID>
+    var splitAccumulationMode: SplitAccumulationMode
     var state: SessionState
     var pauseStartedAt: Date?
     var lastDistributedWholeSeconds: Int
@@ -36,6 +37,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         laps: [WorkLap],
         selectedLapID: UUID?,
         activeLapIDs: Set<UUID>,
+        splitAccumulationMode: SplitAccumulationMode,
         state: SessionState,
         pauseStartedAt: Date?,
         lastDistributedWholeSeconds: Int,
@@ -46,6 +48,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         self.laps = laps
         self.selectedLapID = selectedLapID
         self.activeLapIDs = activeLapIDs
+        self.splitAccumulationMode = splitAccumulationMode
         self.state = state
         self.pauseStartedAt = pauseStartedAt
         self.lastDistributedWholeSeconds = max(0, lastDistributedWholeSeconds)
@@ -58,6 +61,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         case laps
         case selectedLapID
         case activeLapIDs
+        case splitAccumulationMode
         case state
         case pauseStartedAt
         case lastDistributedWholeSeconds
@@ -71,6 +75,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
         laps = try container.decode([WorkLap].self, forKey: .laps)
         selectedLapID = try container.decodeIfPresent(UUID.self, forKey: .selectedLapID)
         activeLapIDs = try container.decodeIfPresent(Set<UUID>.self, forKey: .activeLapIDs) ?? []
+        splitAccumulationMode = try container.decodeIfPresent(SplitAccumulationMode.self, forKey: .splitAccumulationMode) ?? .checkbox
         state = try container.decode(SessionState.self, forKey: .state)
         pauseStartedAt = try container.decodeIfPresent(Date.self, forKey: .pauseStartedAt)
         lastDistributedWholeSeconds = max(0, try container.decodeIfPresent(Int.self, forKey: .lastDistributedWholeSeconds) ?? 0)
@@ -80,7 +85,7 @@ struct PersistedSessionContext: Equatable, Codable, Sendable {
 }
 
 struct StopwatchStorageSnapshot: Equatable, Codable, Sendable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 4
 
     var schemaVersion: Int
     var savedAt: Date

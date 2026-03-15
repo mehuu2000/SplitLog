@@ -127,7 +127,7 @@ struct SessionPopoverView: View {
             laps: stopwatch.laps,
             selectedLapID: stopwatch.selectedLapID,
             activeLapIDs: stopwatch.activeLapIDs,
-            splitAccumulationMode: appSettingsStore.splitAccumulationMode,
+            splitAccumulationMode: stopwatch.splitAccumulationMode,
             lapDisplayedSeconds: lapDisplayedSeconds,
             subtitleText: subtitleText,
             subtitleColor: colorResolver.subtitleTextColor,
@@ -217,6 +217,7 @@ struct SessionPopoverView: View {
                     sessionTitleSection
 
                     Spacer()
+                    splitAccumulationModeControl
                     sessionSummaryButton(
                         lapDisplayedSeconds: lapDisplayedSeconds,
                         totalElapsedSeconds: totalElapsedSeconds
@@ -420,7 +421,6 @@ struct SessionPopoverView: View {
         .tint(colorResolver.controlTint)
         .background(.regularMaterial)
         .onAppear {
-            stopwatch.setSplitAccumulationMode(appSettingsStore.splitAccumulationMode)
             stopwatch.setDisplayActive(true)
             refreshSessionTitleUnderlineWidth(force: true)
             refreshLapDisplayedSecondsCache(
@@ -437,11 +437,6 @@ struct SessionPopoverView: View {
             commitPendingInlineEdits()
             commitActiveLapMemoEditIfNeeded()
             stopwatch.setDisplayActive(false)
-        }
-        .onChange(of: appSettingsStore.splitAccumulationMode) { _, mode in
-            stopwatch.setSplitAccumulationMode(mode)
-            invalidateLapDisplayedSecondsCache()
-            invalidateTimelineCache()
         }
         .onChange(of: appSettingsStore.timelineRingHoursPerCycle) { _, _ in
             invalidateTimelineCache()
@@ -481,6 +476,10 @@ struct SessionPopoverView: View {
 
     private var selectedSessionTitleText: String {
         stopwatch.session?.title ?? "セッション未選択"
+    }
+
+    private var displayedSplitAccumulationMode: SplitAccumulationMode {
+        stopwatch.session == nil ? appSettingsStore.defaultSplitAccumulationMode : stopwatch.splitAccumulationMode
     }
 
     private var isEditingSelectedSessionTitle: Bool {
@@ -554,12 +553,67 @@ struct SessionPopoverView: View {
     }
 
     @ViewBuilder
+    private var splitAccumulationModeControl: some View {
+        HStack(spacing: 2) {
+            splitAccumulationModeButton(mode: .radio)
+            splitAccumulationModeButton(mode: .checkbox)
+        }
+        .padding(2)
+        .background(
+            Capsule()
+                .fill(colorResolver.sectionBackgroundColor)
+        )
+        .overlay(
+            Capsule()
+                .stroke(colorResolver.sectionBorderColor, lineWidth: 1)
+        )
+        .opacity(stopwatch.session == nil ? 0.6 : 1)
+        .fixedSize()
+    }
+
+    private func splitAccumulationModeButton(
+        mode: SplitAccumulationMode
+    ) -> some View {
+        let isSelected = displayedSplitAccumulationMode == mode
+        return Button {
+            handleSetSplitAccumulationMode(mode)
+        } label: {
+            Image(systemName: splitAccumulationModeIconName(for: mode, selected: isSelected))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(isSelected ? 0.95 : 0.7))
+                .frame(width: 24, height: 22)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? colorResolver.controlTint.opacity(0.18) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(stopwatch.session == nil)
+        .help(mode == .radio ? "ラジオ配分" : "チェック配分")
+        .accessibilityLabel(mode == .radio ? "ラジオ配分" : "チェック配分")
+    }
+
+    private func splitAccumulationModeIconName(
+        for mode: SplitAccumulationMode,
+        selected: Bool
+    ) -> String {
+        switch mode {
+        case .radio:
+            return selected ? "largecircle.fill.circle" : "circle"
+        case .checkbox:
+            return selected ? "checkmark.square.fill" : "square"
+        }
+    }
+
+    @ViewBuilder
     private func elapsedTimeBadge(totalElapsedSeconds: Int) -> some View {
         HStack(spacing: 6) {
             Text("全体経過")
                 .foregroundStyle(colorResolver.subtitleTextColor)
+                .lineLimit(1)
             Text(formatDuration(seconds: totalElapsedSeconds))
                 .monospacedDigit()
+                .lineLimit(1)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
@@ -571,6 +625,7 @@ struct SessionPopoverView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(colorResolver.sectionBorderColor, lineWidth: 1)
         )
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -711,7 +766,9 @@ struct SessionPopoverView: View {
             return
         }
 
-        stopwatch.startSession()
+        stopwatch.startSession(
+            splitAccumulationMode: appSettingsStore.defaultSplitAccumulationMode
+        )
         invalidateComputedCaches()
     }
 
@@ -723,7 +780,9 @@ struct SessionPopoverView: View {
 
     private func handleAddSession() {
         commitPendingInlineEdits()
-        stopwatch.addSession()
+        stopwatch.addSession(
+            splitAccumulationMode: appSettingsStore.defaultSplitAccumulationMode
+        )
         invalidateComputedCaches()
     }
 
@@ -742,6 +801,13 @@ struct SessionPopoverView: View {
     private func handleToggleLapActive(lapID: UUID) {
         commitPendingInlineEdits()
         stopwatch.toggleLapActive(lapID: lapID)
+        invalidateComputedCaches()
+    }
+
+    private func handleSetSplitAccumulationMode(_ mode: SplitAccumulationMode) {
+        guard stopwatch.session != nil else { return }
+        commitPendingInlineEdits()
+        stopwatch.setSplitAccumulationMode(mode)
         invalidateComputedCaches()
     }
 

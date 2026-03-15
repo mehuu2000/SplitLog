@@ -126,28 +126,27 @@ struct SessionSettingsOverlayView: View {
                                 .fixedSize()
                             }
 
-                            HStack {
-                                Text("Split配分モード")
-                                Spacer()
-                                Picker(
-                                    "Split配分モード",
-                                    selection: Binding(
-                                        get: { settingsStore.splitAccumulationMode },
-                                        set: { newValue in
-                                            settingsStore.setSplitAccumulationMode(newValue)
-                                        }
-                                    )
-                                ) {
-                                    Text("ラジオ")
-                                        .tag(SplitAccumulationMode.radio)
-                                    Text("チェック")
-                                        .tag(SplitAccumulationMode.checkbox)
-                                }
-                                .pickerStyle(.menu)
-                                .labelsHidden()
-                            }
+                            Text("新規セッションのデフォルトSplit配分モード")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
 
-                            Text("ラジオ: 選択中のSplitに加算 / チェック: チェック中Splitへ順番に配分")
+                            Picker(
+                                "デフォルト分配モード",
+                                selection: Binding(
+                                    get: { settingsStore.defaultSplitAccumulationMode },
+                                    set: { newValue in
+                                        settingsStore.setDefaultSplitAccumulationMode(newValue)
+                                    }
+                                )
+                            ) {
+                                Text("ラジオ")
+                                    .tag(SplitAccumulationMode.radio)
+                                Text("チェック")
+                                    .tag(SplitAccumulationMode.checkbox)
+                            }
+                            .pickerStyle(.segmented)
+
+                            Text("新しく追加するセッションの初期値として使います。")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }

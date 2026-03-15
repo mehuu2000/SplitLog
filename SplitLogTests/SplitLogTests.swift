@@ -122,6 +122,31 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func splitAccumulationMode_isManagedPerSession() throws {
+        let service = StopwatchService(autoTick: false, persistenceEnabled: false)
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+        let t4 = Date(timeIntervalSince1970: 1_040)
+
+        service.startSession(splitAccumulationMode: .radio, at: t0)
+        let session1ID = try #require(service.session?.id)
+        #expect(service.splitAccumulationMode == .radio)
+
+        service.finishSession(at: t1)
+        service.addSession(splitAccumulationMode: .checkbox, at: t2)
+        let session2ID = try #require(service.session?.id)
+        #expect(service.splitAccumulationMode == .checkbox)
+
+        service.selectSession(sessionID: session1ID, at: t3)
+        #expect(service.splitAccumulationMode == .radio)
+
+        service.selectSession(sessionID: session2ID, at: t4)
+        #expect(service.splitAccumulationMode == .checkbox)
+    }
+
+    @MainActor
     @Test func checkboxMode_finishLap_keepsExistingChecksAndAddsNewLapCheck() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let t0 = Date(timeIntervalSince1970: 1_000)
@@ -574,6 +599,32 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func splitAccumulationMode_persistsPerSessionAcrossRestore() async throws {
+        let store = InMemorySessionStore()
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let t1 = Date(timeIntervalSince1970: 1_010)
+        let t2 = Date(timeIntervalSince1970: 1_020)
+        let t3 = Date(timeIntervalSince1970: 1_030)
+
+        let source = StopwatchService(autoTick: false, sessionStore: store)
+        source.startSession(splitAccumulationMode: .radio, at: t0)
+        let session1ID = try #require(source.session?.id)
+        source.finishSession(at: t1)
+        source.addSession(splitAccumulationMode: .checkbox, at: t2)
+        let session2ID = try #require(source.session?.id)
+        await waitForCoalescedPersistence()
+
+        let restored = StopwatchService(autoTick: false, sessionStore: store)
+        #expect(restored.splitAccumulationMode == .checkbox)
+
+        restored.selectSession(sessionID: session1ID, at: t3)
+        #expect(restored.splitAccumulationMode == .radio)
+
+        restored.selectSession(sessionID: session2ID, at: t3)
+        #expect(restored.splitAccumulationMode == .checkbox)
+    }
+
+    @MainActor
     @Test func updateLapMemo_persistsAndRestoresMemoText() async throws {
         let store = InMemorySessionStore()
         let t0 = Date(timeIntervalSince1970: 1_000)
@@ -618,6 +669,7 @@ struct SplitLogTests {
             laps: [],
             selectedLapID: nil,
             activeLapIDs: [],
+            splitAccumulationMode: .radio,
             state: .idle,
             pauseStartedAt: nil,
             lastDistributedWholeSeconds: 0,
@@ -629,6 +681,7 @@ struct SplitLogTests {
             laps: [],
             selectedLapID: nil,
             activeLapIDs: [],
+            splitAccumulationMode: .checkbox,
             state: .idle,
             pauseStartedAt: nil,
             lastDistributedWholeSeconds: 0,
@@ -687,6 +740,7 @@ struct SplitLogTests {
             laps: [lap1, lap2],
             selectedLapID: UUID(), // not found in laps
             activeLapIDs: [],
+            splitAccumulationMode: .checkbox,
             state: .stopped,
             pauseStartedAt: t2,
             lastDistributedWholeSeconds: 20,
@@ -716,6 +770,34 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func persistedSessionContext_withoutSplitAccumulationMode_defaultsToCheckbox() throws {
+        let payload = """
+        {
+          "session": {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "title": "セッション1",
+            "startedAt": "2026-03-15T00:00:00Z",
+            "endedAt": null
+          },
+          "laps": [],
+          "selectedLapID": null,
+          "activeLapIDs": [],
+          "state": "idle",
+          "pauseStartedAt": null,
+          "lastDistributedWholeSeconds": 0,
+          "distributionCursor": 0,
+          "totalPausedDuration": 0
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(PersistedSessionContext.self, from: Data(payload.utf8))
+
+        #expect(decoded.splitAccumulationMode == .checkbox)
+    }
+
+    @MainActor
     @Test func appSettingsStore_withoutStoredValue_usesDefaults() {
         let isolated = makeIsolatedUserDefaults()
         defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
@@ -723,6 +805,7 @@ struct SplitLogTests {
         let store = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: "app_settings_test")
 
         #expect(store.themeMode == .color)
+        #expect(store.defaultSplitAccumulationMode == .radio)
         #expect(store.settings == .default)
     }
 
@@ -739,28 +822,30 @@ struct SplitLogTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
         #expect(decoded.themeMode == .monochrome)
         #expect(decoded.timelineRingHoursPerCycle == 3)
+        #expect(decoded.defaultSplitAccumulationMode == .radio)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
         #expect(restored.themeMode == .monochrome)
         #expect(restored.timelineRingHoursPerCycle == 3)
+        #expect(restored.defaultSplitAccumulationMode == .radio)
     }
 
     @MainActor
-    @Test func appSettingsStore_timelineRingHoursPerCycle_isPersistedAndRestored() throws {
+    @Test func appSettingsStore_defaultSplitAccumulationMode_isPersistedAndRestored() throws {
         let isolated = makeIsolatedUserDefaults()
         defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
         let storageKey = "app_settings_test"
 
         let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        source.setTimelineRingHoursPerCycle(6)
+        source.setDefaultSplitAccumulationMode(.checkbox)
 
         let storedData = try #require(isolated.userDefaults.data(forKey: storageKey))
         let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
-        #expect(decoded.timelineRingHoursPerCycle == 6)
+        #expect(decoded.defaultSplitAccumulationMode == .checkbox)
         #expect(decoded.themeMode == .color)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        #expect(restored.timelineRingHoursPerCycle == 6)
+        #expect(restored.defaultSplitAccumulationMode == .checkbox)
         #expect(restored.themeMode == .color)
     }
 
@@ -771,14 +856,14 @@ struct SplitLogTests {
         let storageKey = "app_settings_test"
 
         let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        source.update(AppSettings(themeMode: .monochrome, timelineRingHoursPerCycle: 6))
+        source.update(AppSettings(themeMode: .monochrome, defaultSplitAccumulationMode: .checkbox))
 
         #expect(source.themeMode == .monochrome)
-        #expect(source.timelineRingHoursPerCycle == 6)
+        #expect(source.defaultSplitAccumulationMode == .checkbox)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
         #expect(restored.themeMode == .monochrome)
-        #expect(restored.timelineRingHoursPerCycle == 6)
+        #expect(restored.defaultSplitAccumulationMode == .checkbox)
     }
 
     @MainActor
@@ -804,7 +889,7 @@ struct SplitLogTests {
         #expect(restored.timelineRingHoursPerCycle == 5)
         #expect(restored.summaryTimeFormat == .hourMinute)
         #expect(restored.summaryMemoFormat == .plain)
-        #expect(restored.splitAccumulationMode == .checkbox)
+        #expect(restored.defaultSplitAccumulationMode == .checkbox)
     }
 
 }
