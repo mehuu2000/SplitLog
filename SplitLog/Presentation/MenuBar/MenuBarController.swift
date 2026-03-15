@@ -213,7 +213,12 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func handleStateShortcut(_ action: () -> Bool) {
         let wasShown = popover.isShown
         guard action() else { return }
-        guard !wasShown else { return }
+        if wasShown {
+            if isTemporarilyShowingPopover {
+                beginTemporaryPopoverAutoClose()
+            }
+            return
+        }
         showPopover(temporary: true)
     }
 
@@ -223,6 +228,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         let wasShown = popover.isShown
         if !wasShown {
             showPopover(temporary: true)
+        } else if isTemporarilyShowingPopover {
+            beginTemporaryPopoverAutoClose()
         }
 
         DispatchQueue.main.async { [weak self] in
