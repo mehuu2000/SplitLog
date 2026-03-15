@@ -21,9 +21,14 @@ final class SessionPopoverCommandCenter: ObservableObject {
     }
 
     @Published private(set) var commandRequest: CommandRequest?
+    @Published private(set) var isPopoverLocked = false
 
     func send(_ command: Command) {
         commandRequest = CommandRequest(command: command)
+    }
+
+    func togglePopoverLock() {
+        isPopoverLocked.toggle()
     }
 
     func consume(id: UUID) {

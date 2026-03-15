@@ -205,6 +205,24 @@ struct SessionPopoverView: View {
                     .help("使い方")
                     .accessibilityLabel("使い方")
 
+                    Button(action: commandCenter.togglePopoverLock) {
+                        Image(systemName: commandCenter.isPopoverLocked ? "lock.fill" : "lock.open")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .foregroundStyle(commandCenter.isPopoverLocked ? Color.white : .primary)
+                            .frame(width: 16, height: 16)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        commandCenter.isPopoverLocked
+                                            ? Color.accentColor
+                                            : colorResolver.headerControlBackground
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(commandCenter.isPopoverLocked ? "Popoverロック中" : "Popoverロック")
+                    .accessibilityLabel(commandCenter.isPopoverLocked ? "Popoverロック中" : "Popoverロック")
+
                     Spacer()
 
                     HStack(spacing: 8) {

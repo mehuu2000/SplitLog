@@ -296,6 +296,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         ) { [weak self] event in
             guard let self else { return event }
             guard self.popover.isShown else { return event }
+            guard !self.commandCenter.isPopoverLocked else { return event }
             guard !self.isEventInsidePopover(event), !self.isEventOnStatusItemButton(event) else {
                 return event
             }
@@ -309,6 +310,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.popover.isShown else { return }
+                guard !self.commandCenter.isPopoverLocked else { return }
                 self.closePopover()
             }
         }

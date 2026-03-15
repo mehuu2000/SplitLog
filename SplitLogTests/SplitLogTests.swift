@@ -48,6 +48,19 @@ struct SplitLogTests {
     }
 
     @MainActor
+    @Test func sessionPopoverCommandCenter_togglePopoverLock_updatesPublishedState() {
+        let commandCenter = SessionPopoverCommandCenter()
+
+        #expect(commandCenter.isPopoverLocked == false)
+
+        commandCenter.togglePopoverLock()
+        #expect(commandCenter.isPopoverLocked == true)
+
+        commandCenter.togglePopoverLock()
+        #expect(commandCenter.isPopoverLocked == false)
+    }
+
+    @MainActor
     @Test func startSession_startsRunningStateWithFirstLap() {
         let service = StopwatchService(autoTick: false, persistenceEnabled: false)
         let startedAt = Date(timeIntervalSince1970: 1_000)
