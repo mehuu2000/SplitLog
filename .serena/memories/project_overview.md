@@ -1,0 +1,13 @@
+# SplitLog overview
+- Purpose: macOS menu bar app for time tracking work sessions and splits/laps, with editable labels/memos and summary copy.
+- Tech stack: Swift 5, SwiftUI, AppKit (`NSPopover`, status bar item), Combine, Foundation. Xcode project: `SplitLog.xcodeproj`.
+- App shape: menu-bar-only app. `SplitLogApp` exposes only `Settings { EmptyView() }`, while `AppDelegate` creates `MenuBarController` on launch.
+- Architecture:
+  - `App/`: app entry and lifecycle.
+  - `Presentation/`: menu bar controller and popover SwiftUI views/components.
+  - `Domain/Models/`: `WorkSession`, `WorkLap`, settings enums/models.
+  - `Domain/Services/StopwatchService.swift`: main state machine and business logic for sessions, splits, elapsed-time distribution, restore/persist, single-running-session guarantee.
+  - `Domain/Stores/`: persistence for session snapshot JSON (`FileSessionStore`) and app settings via `UserDefaults` (`AppSettingsStore`).
+- Current product scope in code is ahead of `SplitLog/memo.md`: multiple sessions, session add/select/delete, settings modal, summary modal, split memo editing, JSON persistence, restore on launch, and split accumulation modes are already implemented and covered by tests.
+- Persistence: sessions snapshot stored under Application Support `SplitLog/sessions.json`; settings in `UserDefaults` under key `app_settings`.
+- Tests: `SplitLogTests` contains behavior-focused unit tests for session transitions, persistence/restore normalization, settings persistence, and split accumulation behavior. `SplitLogUITests` exists but is minimal.

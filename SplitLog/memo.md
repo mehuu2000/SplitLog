@@ -628,3 +628,71 @@ SplitLog/
 
 - チェックモードの `selectedLapID` 強制正規化
 - 設定モーダル表示中の時間プレビューのライブ追従
+
+## 19. 方針更新（タイムラインリング表示設定の削除・2026-03-15）
+
+最終更新: 2026-03-15
+
+### 19.1 背景
+
+- 現在は `showTimelineRing` によって円グラフ（経過時間リング）の表示ON/OFFを切り替えられる
+- ただし実運用では非表示にすることが一切なく、常時表示が前提になっている
+- このため、設定維持コストに対して実利用価値が低く、UI分岐・サイズ分岐・更新API分岐の複雑さだけが残っている
+
+### 19.2 今回の確定方針
+
+1. `showTimelineRing` は「常にON固定」ではなく、「設定自体を削除」する
+   - `AppSettings` から項目を削除
+   - `AppSettingsStore` から getter / setter を削除
+   - 設定モーダルからトグルUIを削除
+
+2. Popoverのレイアウトは「リング表示あり」の系統に一本化する
+   - compact用の余白・幅・ヘッダー分岐を削除
+   - `popoverSize(showTimelineRing:)` のような表示条件付きAPIを整理し、固定サイズ化する
+   - リング非表示時専用のモーダル幅分岐・タイトル幅分岐も削除する
+
+3. 画面表示状態の通知APIも簡略化する
+   - `setDisplayActive(_:showTimelineRing:)` のようなリング表示有無を受け取るAPIを整理する
+   - `isTimelineRingVisible` など、今回の仕様に不要な状態を削除する
+   - 更新頻度切替ロジックにリング表示ON/OFFが残っている場合は同時に撤去する
+
+4. 既存ユーザー設定との互換は「古いキーを無視する」方針で扱う
+   - 旧 `UserDefaults` に `showTimelineRing` が残っていても、新実装側で decode 対象から外せば通常は問題ない
+   - 専用移行処理は原則不要
+
+### 19.3 影響整理
+
+- 本変更で意味的に変えないもの
+  - セッション開始 / 停止 / 再開
+  - Split追加 / 選択 / 配分
+  - メモ編集
+  - サマリー生成
+  - JSON保存 / 復元
+  - テーマ切替
+  - リング周期設定（`timelineRingHoursPerCycle`）
+
+- 注意が必要な箇所
+  - `SessionPopoverView`
+    - リング非表示専用のレイアウト分岐を中途半端に残すと余白や配置崩れが起こり得る
+  - `MenuBarController`
+    - Popoverサイズの購読更新が不要になるため、購読だけ残さないようにする
+  - `AppSettings` / `AppSettingsStore`
+    - `showTimelineRing` を直接参照する呼び出しはすべて整理対象
+  - テスト
+    - `showTimelineRing` 前提の保存復元テストは削除または新仕様へ更新する
+
+### 19.4 実装順
+
+1. `AppSettings` / `AppSettingsStore` から `showTimelineRing` を削除
+2. 設定モーダルから表示トグルを削除
+3. `SessionPopoverView` を常時リング表示レイアウトへ統一
+4. `MenuBarController` のサイズ購読と関連APIを簡略化
+5. `StopwatchService` のリング表示有無依存API / 状態を削除
+6. テスト・README・本メモを新仕様へ合わせて更新
+
+### 19.5 完了条件
+
+- 設定画面にリング表示ON/OFFが存在しない
+- Popoverが常に正常なリング表示レイアウトで開く
+- セッション操作・Split操作・保存復元に回帰不具合がない
+- 古い設定データが残っていても起動や設定復元が破綻しない
