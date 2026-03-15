@@ -197,11 +197,15 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
                 return true
             }
         case let .targetLap(index):
-            handleStateShortcut {
+            handleStateShortcut(onSuccess: { [weak self] in
+                self?.revealSelectedLapSoon()
+            }) {
                 self.stopwatch.selectOrToggleLapForShortcut(displayIndex: index)
             }
         case let .moveLap(offset):
-            handleStateShortcut {
+            handleStateShortcut(onSuccess: { [weak self] in
+                self?.revealSelectedLapSoon()
+            }) {
                 self.stopwatch.moveSelectedLapForShortcut(by: offset)
             }
         }
@@ -209,6 +213,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
 
     private func handleStateShortcut(
         showPopoverWhenNoAction: Bool = false,
+        onSuccess: (() -> Void)? = nil,
         _ action: () -> Bool
     ) {
         let wasShown = popover.isShown
@@ -217,6 +222,7 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
             showPopover(deferUntilNextRunLoop: true)
             return
         }
+        onSuccess?()
         guard !wasShown else { return }
         showPopover(deferUntilNextRunLoop: true)
     }
@@ -274,6 +280,12 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     private func closePopover() {
         removeOutsideClickMonitors()
         popover.performClose(statusItem.button)
+    }
+
+    private func revealSelectedLapSoon() {
+        DispatchQueue.main.async { [weak self] in
+            self?.commandCenter.send(.revealSelectedLap)
+        }
     }
 
     private func installOutsideClickMonitors() {

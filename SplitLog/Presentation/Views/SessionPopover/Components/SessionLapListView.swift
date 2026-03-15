@@ -20,6 +20,7 @@ struct SessionLapListView: View {
     let inlineEditorBackgroundColor: Color
     let rowCardBorderColor: Color
     let rowCardBackgroundColor: Color
+    let scrollToSelectionToken: Int
     @Binding var editingLapID: UUID?
     @Binding var editingLapLabelDraft: String
     let editingFocusToken: Int
@@ -88,6 +89,14 @@ struct SessionLapListView: View {
                         DispatchQueue.main.async {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(lastID, anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: scrollToSelectionToken) { _, _ in
+                        guard let selectedLapID else { return }
+                        DispatchQueue.main.async {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(selectedLapID, anchor: .center)
                             }
                         }
                     }

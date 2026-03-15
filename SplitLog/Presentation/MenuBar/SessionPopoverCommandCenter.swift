@@ -17,6 +17,7 @@ final class SessionPopoverCommandCenter: ObservableObject {
 
     enum Command: Equatable {
         case openCurrentLapMemo
+        case revealSelectedLap
     }
 
     @Published private(set) var commandRequest: CommandRequest?

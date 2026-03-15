@@ -83,6 +83,7 @@ struct SessionPopoverView: View {
     @State private var toastMessage: String?
     @State private var toastStyle: ToastStyle = .success
     @State private var toastGeneration: Int = 0
+    @State private var lapListScrollToken: Int = 0
     @State private var sessionTitleUnderlineWidth: CGFloat = 32
     @State private var sessionTitleUnderlineMeasurementCache = SessionTitleUnderlineMeasurement(text: "", fontSize: 0)
     @State private var lapSecondsCacheVersion: Int = 0
@@ -160,6 +161,7 @@ struct SessionPopoverView: View {
             inlineEditorBackgroundColor: colorResolver.inlineEditorBackgroundColor,
             rowCardBorderColor: colorResolver.lapCardBorderColor,
             rowCardBackgroundColor: colorResolver.lapCardBackgroundColor,
+            scrollToSelectionToken: lapListScrollToken,
             editingLapID: $editingLapID,
             editingLapLabelDraft: $editingLapLabelDraft,
             editingFocusToken: editingFocusToken,
@@ -988,6 +990,8 @@ struct SessionPopoverView: View {
                 return
             }
             beginLapMemoEdit(for: currentLap)
+        case .revealSelectedLap:
+            lapListScrollToken &+= 1
         }
 
         commandCenter.consume(id: request.id)
