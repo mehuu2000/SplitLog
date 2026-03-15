@@ -39,10 +39,6 @@ final class AppSettingsStore: ObservableObject {
         settings.themeMode
     }
 
-    var showTimelineRing: Bool {
-        settings.showTimelineRing
-    }
-
     var timelineRingHoursPerCycle: Int {
         settings.timelineRingHoursPerCycle
     }
@@ -62,11 +58,6 @@ final class AppSettingsStore: ObservableObject {
     func setThemeMode(_ themeMode: ThemeMode) {
         guard settings.themeMode != themeMode else { return }
         settings.themeMode = themeMode
-    }
-
-    func setShowTimelineRing(_ isVisible: Bool) {
-        guard settings.showTimelineRing != isVisible else { return }
-        settings.showTimelineRing = isVisible
     }
 
     func setTimelineRingHoursPerCycle(_ hours: Int) {

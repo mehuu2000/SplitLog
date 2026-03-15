@@ -34,11 +34,9 @@ final class StopwatchService: ObservableObject {
     private var timerCancellable: AnyCancellable?
     private var firstTickWorkItem: DispatchWorkItem?
     private let autoTick: Bool
-    private let foregroundClockUpdateIntervalWithRing: TimeInterval = 1.0
-    private let foregroundClockUpdateIntervalWithoutRing: TimeInterval = 1.0
+    private let foregroundClockUpdateInterval: TimeInterval = 1.0
     private let backgroundClockUpdateInterval: TimeInterval = 1.0
     private var isDisplayActive: Bool = false
-    private var isTimelineRingVisible: Bool = true
 
     private var sessionContexts: [UUID: SessionContext] = [:]
     private var sessionOrder: [UUID] = []
@@ -543,15 +541,8 @@ final class StopwatchService: ObservableObject {
     }
 
     func setDisplayActive(_ isActive: Bool) {
-        setDisplayActive(isActive, showTimelineRing: isTimelineRingVisible)
-    }
-
-    func setDisplayActive(_ isActive: Bool, showTimelineRing: Bool) {
-        let activityDidChange = isDisplayActive != isActive
-        let ringVisibilityDidChange = isTimelineRingVisible != showTimelineRing
-        guard activityDidChange || ringVisibilityDidChange else { return }
+        guard isDisplayActive != isActive else { return }
         isDisplayActive = isActive
-        isTimelineRingVisible = showTimelineRing
         syncTimerForSelectedState()
     }
 
@@ -995,14 +986,7 @@ final class StopwatchService: ObservableObject {
     }
 
     private func startClock() {
-        let interval: TimeInterval
-        if isDisplayActive {
-            interval = isTimelineRingVisible
-                ? foregroundClockUpdateIntervalWithRing
-                : foregroundClockUpdateIntervalWithoutRing
-        } else {
-            interval = backgroundClockUpdateInterval
-        }
+        let interval = isDisplayActive ? foregroundClockUpdateInterval : backgroundClockUpdateInterval
 
         let now = Date()
         let firstTickDelay = initialTickDelay(at: now, interval: interval)

@@ -107,16 +107,6 @@ struct SessionSettingsOverlayView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
-                            Toggle(
-                                "経過時間の円を表示",
-                                isOn: Binding(
-                                    get: { settingsStore.showTimelineRing },
-                                    set: { isVisible in
-                                        settingsStore.setShowTimelineRing(isVisible)
-                                    }
-                                )
-                            )
-
                             HStack {
                                 Text("リング周期（1周）")
                                 Spacer()

@@ -723,7 +723,6 @@ struct SplitLogTests {
         let store = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: "app_settings_test")
 
         #expect(store.themeMode == .color)
-        #expect(store.showTimelineRing == true)
         #expect(store.settings == .default)
     }
 
@@ -739,29 +738,29 @@ struct SplitLogTests {
         let storedData = try #require(isolated.userDefaults.data(forKey: storageKey))
         let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
         #expect(decoded.themeMode == .monochrome)
-        #expect(decoded.showTimelineRing == true)
+        #expect(decoded.timelineRingHoursPerCycle == 3)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
         #expect(restored.themeMode == .monochrome)
-        #expect(restored.showTimelineRing == true)
+        #expect(restored.timelineRingHoursPerCycle == 3)
     }
 
     @MainActor
-    @Test func appSettingsStore_showTimelineRing_isPersistedAndRestored() throws {
+    @Test func appSettingsStore_timelineRingHoursPerCycle_isPersistedAndRestored() throws {
         let isolated = makeIsolatedUserDefaults()
         defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
         let storageKey = "app_settings_test"
 
         let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        source.setShowTimelineRing(false)
+        source.setTimelineRingHoursPerCycle(6)
 
         let storedData = try #require(isolated.userDefaults.data(forKey: storageKey))
         let decoded = try JSONDecoder().decode(AppSettings.self, from: storedData)
-        #expect(decoded.showTimelineRing == false)
+        #expect(decoded.timelineRingHoursPerCycle == 6)
         #expect(decoded.themeMode == .color)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        #expect(restored.showTimelineRing == false)
+        #expect(restored.timelineRingHoursPerCycle == 6)
         #expect(restored.themeMode == .color)
     }
 
@@ -772,14 +771,40 @@ struct SplitLogTests {
         let storageKey = "app_settings_test"
 
         let source = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
-        source.update(AppSettings(themeMode: .monochrome, showTimelineRing: false))
+        source.update(AppSettings(themeMode: .monochrome, timelineRingHoursPerCycle: 6))
 
         #expect(source.themeMode == .monochrome)
-        #expect(source.showTimelineRing == false)
+        #expect(source.timelineRingHoursPerCycle == 6)
 
         let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
         #expect(restored.themeMode == .monochrome)
-        #expect(restored.showTimelineRing == false)
+        #expect(restored.timelineRingHoursPerCycle == 6)
+    }
+
+    @MainActor
+    @Test func appSettingsStore_restoresLegacyPayloadThatStillContainsShowTimelineRing() throws {
+        let isolated = makeIsolatedUserDefaults()
+        defer { isolated.userDefaults.removePersistentDomain(forName: isolated.suiteName) }
+        let storageKey = "app_settings_test"
+        let legacyPayload = """
+        {
+          "themeMode": "monochrome",
+          "showTimelineRing": false,
+          "timelineRingHoursPerCycle": 5,
+          "summaryTimeFormat": "hourMinute",
+          "summaryMemoFormat": "plain",
+          "splitAccumulationMode": "checkbox"
+        }
+        """
+
+        isolated.userDefaults.set(Data(legacyPayload.utf8), forKey: storageKey)
+
+        let restored = AppSettingsStore(userDefaults: isolated.userDefaults, storageKey: storageKey)
+        #expect(restored.themeMode == .monochrome)
+        #expect(restored.timelineRingHoursPerCycle == 5)
+        #expect(restored.summaryTimeFormat == .hourMinute)
+        #expect(restored.summaryMemoFormat == .plain)
+        #expect(restored.splitAccumulationMode == .checkbox)
     }
 
 }
