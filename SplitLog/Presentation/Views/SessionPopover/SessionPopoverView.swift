@@ -1210,13 +1210,13 @@ struct SessionPopoverView: View {
         lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds, format: timeFormat)))】")
 
         if stopwatch.laps.isEmpty {
-            lines.append("・Splitはまだありません")
+            lines.append("Splitはまだありません")
             return lines.joined(separator: "\n")
         }
 
         for lap in stopwatch.laps {
             let elapsedSeconds = lapDisplayedSeconds[lap.id] ?? durationSeconds(stopwatch.elapsedLap(lap))
-            lines.append("・\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds, format: timeFormat)))")
+            lines.append("\(lap.label)　(\(summaryDurationText(seconds: elapsedSeconds, format: timeFormat)))")
             let trimmedMemo = lap.memo.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedMemo.isEmpty {
                 switch memoFormat {
@@ -1228,7 +1228,7 @@ struct SessionPopoverView: View {
                         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                         .filter { !$0.isEmpty }
                     for paragraph in paragraphs {
-                        lines.append(" - \(paragraph)")
+                        lines.append("   - \(paragraph)")
                     }
                 }
             }
