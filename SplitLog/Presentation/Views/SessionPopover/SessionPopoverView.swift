@@ -252,10 +252,7 @@ struct SessionPopoverView: View {
                         .help("セッション追加")
                         .accessibilityLabel("セッション追加")
 
-                        Button {
-                            isShowingSessionOverflowList = false
-                            isShowingSettingsModal = true
-                        } label: {
+                        Button(action: openSettingsModal) {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 12, weight: .semibold))
                                 .frame(width: 24, height: 24)
@@ -306,6 +303,14 @@ struct SessionPopoverView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(colorResolver.sectionBorderColor, lineWidth: 1)
                     )
+                    .overlay(alignment: .topLeading) {
+                        Button(action: openSettingsModal) {
+                            timelineRingCycleBadge
+                        }
+                        .buttonStyle(.plain)
+                        .help("リング設定を開く")
+                        .accessibilityLabel("リング設定を開く")
+                    }
 
                     lapListView
                 }
@@ -562,6 +567,18 @@ struct SessionPopoverView: View {
         stopwatch.session == nil ? appSettingsStore.defaultSplitAccumulationMode : stopwatch.splitAccumulationMode
     }
 
+    private var timelineRingCycleBadge: some View {
+        HStack(alignment: .center, spacing: 2) {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 8, weight: .semibold))
+            Text("\(max(1, appSettingsStore.timelineRingHoursPerCycle))h")
+                .font(.system(size: 9, weight: .medium))
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+    }
+
     private var isEditingSelectedSessionTitle: Bool {
         guard let editingSessionID, let selectedSessionID = stopwatch.selectedSessionID else { return false }
         return editingSessionID == selectedSessionID
@@ -683,6 +700,11 @@ struct SessionPopoverView: View {
         memoEditingLapID = nil
         isShowingOperationGuideModal = false
         isShowingHelpMenuModal = true
+    }
+
+    private func openSettingsModal() {
+        isShowingSessionOverflowList = false
+        isShowingSettingsModal = true
     }
 
     private func openOperationGuide() {
