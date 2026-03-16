@@ -452,6 +452,7 @@ struct SessionPopoverView: View {
                     onResetSettings: handleResetAllSettings,
                     onInitializeAllData: handleInitializeAllData,
                     onQuitApp: handleQuitApp,
+                    onOpenOperationGuide: openOperationGuide,
                     onClose: {
                         isShowingSettingsModal = false
                     }

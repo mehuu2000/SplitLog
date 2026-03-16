@@ -60,6 +60,7 @@ struct SessionSettingsOverlayView: View {
     let onResetSettings: () -> Void
     let onInitializeAllData: () -> Void
     let onQuitApp: () -> Void
+    let onOpenOperationGuide: () -> Void
     let onClose: () -> Void
     @State private var pendingStorageAction: StorageAction?
     @State private var previewDate: Date = Date()
@@ -196,6 +197,20 @@ struct SessionSettingsOverlayView: View {
                                 }
                                 .pickerStyle(.menu)
                                 .labelsHidden()
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("案内")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            storageActionRow(
+                                title: "操作確認",
+                                systemImage: "questionmark",
+                                destructive: false
+                            ) {
+                                onOpenOperationGuide()
                             }
                         }
 
