@@ -723,7 +723,7 @@ struct SessionPopoverView: View {
     private var contactSupportURL: URL? {
         var components = URLComponents()
         components.scheme = "mailto"
-        components.path = "hamachi.project@gmail.com"
+        components.path = "mehuu2000@gmail.com"
         components.queryItems = [
             URLQueryItem(name: "subject", value: "RunCat お問い合わせ"),
             URLQueryItem(name: "body", value: contactSupportBody)
