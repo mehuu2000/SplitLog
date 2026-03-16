@@ -715,8 +715,57 @@ struct SessionPopoverView: View {
     }
 
     private func openContactSupport() {
-        guard let url = URL(string: "mailto:hamachi.project@gmail.com") else { return }
+        isShowingHelpMenuModal = false
+        guard let url = contactSupportURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private var contactSupportURL: URL? {
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "hamachi.project@gmail.com"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "RunCat お問い合わせ"),
+            URLQueryItem(name: "body", value: contactSupportBody)
+        ]
+        return components.url
+    }
+
+    private var contactSupportBody: String {
+        [
+            "# 環境",
+            "- SplitLog: ver \(appVersionDescription)",
+            "- macOS: \(macOSVersionDescription)",
+            "",
+            "",
+            "# 要件",
+            "- 不具合 / 質問 / 要望 / メッセージ",
+            "",
+            "",
+            "# 概要",
+            ""
+        ].joined(separator: "\n")
+    }
+
+    private var appVersionDescription: String {
+        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (shortVersion, buildVersion) {
+        case let (shortVersion?, buildVersion?) where shortVersion != buildVersion:
+            return "\(shortVersion) (\(buildVersion))"
+        case let (shortVersion?, _):
+            return shortVersion
+        case let (_, buildVersion?):
+            return buildVersion
+        default:
+            return "不明"
+        }
+    }
+
+    private var macOSVersionDescription: String {
+        let version = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
     }
 
     private func splitAccumulationModeIconName(
