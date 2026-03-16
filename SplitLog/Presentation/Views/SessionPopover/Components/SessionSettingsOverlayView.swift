@@ -61,6 +61,7 @@ struct SessionSettingsOverlayView: View {
     let onInitializeAllData: () -> Void
     let onQuitApp: () -> Void
     let onOpenOperationGuide: () -> Void
+    let onOpenContact: () -> Void
     let onClose: () -> Void
     @State private var pendingStorageAction: StorageAction?
     @State private var previewDate: Date = Date()
@@ -211,6 +212,14 @@ struct SessionSettingsOverlayView: View {
                                 destructive: false
                             ) {
                                 onOpenOperationGuide()
+                            }
+
+                            storageActionRow(
+                                title: "お問い合わせ",
+                                systemImage: "envelope",
+                                destructive: false
+                            ) {
+                                onOpenContact()
                             }
                         }
 

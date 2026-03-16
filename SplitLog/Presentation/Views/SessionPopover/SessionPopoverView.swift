@@ -453,6 +453,7 @@ struct SessionPopoverView: View {
                     onInitializeAllData: handleInitializeAllData,
                     onQuitApp: handleQuitApp,
                     onOpenOperationGuide: openOperationGuide,
+                    onOpenContact: openContactSupport,
                     onClose: {
                         isShowingSettingsModal = false
                     }
