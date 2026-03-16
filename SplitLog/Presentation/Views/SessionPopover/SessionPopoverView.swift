@@ -1210,7 +1210,7 @@ struct SessionPopoverView: View {
         timeFormat: SummaryTimeFormat,
         memoFormat: SummaryMemoFormat
     ) -> String {
-        guard let session = stopwatch.session else { return "" }
+        guard stopwatch.session != nil else { return "" }
 
         var lines: [String] = []
 
