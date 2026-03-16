@@ -422,6 +422,7 @@ struct SessionPopoverView: View {
             if isShowingSessionSummaryModal {
                 SessionSummaryOverlayView(
                     summaryText: $sessionSummaryDraft,
+                    summaryHeaderText: sessionSummaryHeaderText(totalElapsedSeconds: totalElapsedSeconds),
                     memoFormatLabel: sessionSummaryMemoFormatLabel,
                     onToggleMemoFormat: {
                         toggleSessionSummaryMemoFormat(
@@ -870,6 +871,11 @@ struct SessionPopoverView: View {
         }
     }
 
+    private func sessionSummaryHeaderText(totalElapsedSeconds: Int) -> String {
+        guard let session = stopwatch.session else { return "" }
+        return "\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds, format: appSettingsStore.summaryTimeFormat)))"
+    }
+
     private var colorResolver: SessionThemeColorResolver {
         SessionThemeColorResolver(mode: appSettingsStore.themeMode)
     }
@@ -1207,7 +1213,6 @@ struct SessionPopoverView: View {
         guard let session = stopwatch.session else { return "" }
 
         var lines: [String] = []
-        lines.append("【\(session.title) (\(summaryDurationText(seconds: totalElapsedSeconds, format: timeFormat)))】")
 
         if stopwatch.laps.isEmpty {
             lines.append("Splitはまだありません")

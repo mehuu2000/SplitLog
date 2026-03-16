@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SessionSummaryOverlayView: View {
     @Binding var summaryText: String
+    let summaryHeaderText: String
     let memoFormatLabel: String
     let onToggleMemoFormat: () -> Void
     let timeFormatLabel: String
@@ -68,10 +69,16 @@ struct SessionSummaryOverlayView: View {
 
                     Spacer()
 
+                    Text(summaryHeaderText)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
                     Button(action: onCopy) {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 12, weight: .semibold))
-                            .frame(width: 28, height: 28)
+                            .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.circle)
