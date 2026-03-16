@@ -53,7 +53,8 @@ struct SessionOperationGuideOverlayView: View {
             details: [
                 "各 Split のメモアイコンから内容を記録できます。",
                 "サマリーボタンで、セッション全体の一覧テキストを確認できます。",
-                "サマリーはコピーできるので、日報や振り返りへ流用しやすいです。"
+                "サマリーはコピーできるので、日報や振り返りへ流用しやすいです。",
+                "お問い合わせは案内や設定から開けて、そのままメール送信画面へ進めます。"
             ]
         ),
         .init(
@@ -69,10 +70,12 @@ struct SessionOperationGuideOverlayView: View {
         .init(
             id: "settings",
             title: "表示や初期値を整える",
-            summary: "テーマ、リング周期、初期モードなどの調整",
+            summary: "テーマ、リング周期、初期モード、ロックなどの調整",
             details: [
                 "設定からテーマカラーやリング周期を変更できます。",
                 "新規セッションのデフォルト配分モードも設定できます。",
+                "円グラフ左上の小さい表示からもリング周期の設定を開けます。",
+                "タイトル右の南京錠アイコンをオンにすると、Popover 外をクリックしても閉じなくなります。",
                 "サマリーの表示形式やストレージ初期化もここから行います。"
             ]
         )
@@ -91,7 +94,7 @@ struct SessionOperationGuideOverlayView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("操作確認")
+                        Text("操作説明")
                             .font(.headline)
                         Text("SplitLog でできることを順番に確認できます。")
                             .font(.caption)

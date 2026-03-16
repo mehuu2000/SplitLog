@@ -207,7 +207,7 @@ struct SessionSettingsOverlayView: View {
                                 .foregroundStyle(.secondary)
 
                             storageActionRow(
-                                title: "操作確認",
+                                title: "操作説明",
                                 systemImage: "questionmark",
                                 destructive: false
                             ) {

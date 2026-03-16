@@ -38,9 +38,9 @@ struct SessionHelpHubOverlayView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     helpCard(
-                        title: "操作確認",
+                        title: "操作説明",
                         subtitle: "このアプリでできることと使い方を確認",
-                        systemImage: "list.bullet.clipboard",
+                        systemImage: "questionmark",
                         accentColor: Color.accentColor,
                         action: onOpenOperationGuide
                     )
