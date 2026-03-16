@@ -462,6 +462,7 @@ struct SessionPopoverView: View {
             if isShowingHelpMenuModal {
                 SessionHelpHubOverlayView(
                     onOpenOperationGuide: openOperationGuide,
+                    onOpenContact: openContactSupport,
                     onClose: {
                         isShowingHelpMenuModal = false
                     }
@@ -711,6 +712,11 @@ struct SessionPopoverView: View {
     private func openOperationGuide() {
         isShowingHelpMenuModal = false
         isShowingOperationGuideModal = true
+    }
+
+    private func openContactSupport() {
+        guard let url = URL(string: "mailto:hamachi.project@gmail.com") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func splitAccumulationModeIconName(

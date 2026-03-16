@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SessionHelpHubOverlayView: View {
     let onOpenOperationGuide: () -> Void
+    let onOpenContact: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -44,11 +45,12 @@ struct SessionHelpHubOverlayView: View {
                         action: onOpenOperationGuide
                     )
 
-                    disabledHelpCard(
+                    helpCard(
                         title: "お問い合わせ",
                         subtitle: "不具合報告や相談用の導線",
-                        note: "準備中",
-                        systemImage: "envelope"
+                        systemImage: "envelope",
+                        accentColor: Color.accentColor,
+                        action: onOpenContact
                     )
                 }
             }
@@ -112,53 +114,4 @@ struct SessionHelpHubOverlayView: View {
         .buttonStyle(.plain)
     }
 
-    private func disabledHelpCard(
-        title: String,
-        subtitle: String,
-        note: String,
-        systemImage: String
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.secondary)
-                .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.secondary.opacity(0.1))
-                )
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(note)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.14))
-                        )
-                }
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.leading)
-            }
-
-            Spacer()
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.42))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .opacity(0.82)
-    }
 }
